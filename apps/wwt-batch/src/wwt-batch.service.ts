@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
-export class AppService {
+export class WwtBatchService {
   getHello(): string {
-    return 'Hello World!';
+    return 'Welcome to the WWT Batch Server!';
   }
 }

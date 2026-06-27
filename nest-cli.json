@@ -1,8 +1,32 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "src",
+  "sourceRoot": "apps/wwt-api/src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "webpack": true,
+    "tsConfigPath": "apps/wwt-api/tsconfig.app.json"
+  },
+  "monorepo": true,
+  "root": "apps/wwt-api",
+  "projects": {
+    "wwt": {
+      "type": "application",
+      "root": "apps/wwt-api",
+      "entryFile": "main",
+      "sourceRoot": "apps/wwt-api/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/wwt-api/tsconfig.app.json"
+      }
+    },
+    "wwt-batch": {
+      "type": "application",
+      "root": "apps/wwt-batch",
+      "entryFile": "main",
+      "sourceRoot": "apps/wwt-batch/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/wwt-batch/tsconfig.app.json"
+      }
+    }
   }
 }
