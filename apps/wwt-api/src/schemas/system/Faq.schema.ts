@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { FaqCategory, FaqStatus } from '../libs/enums/faq.enum';
+import { FaqCategory, FaqStatus } from '../../libs/enums/faq.enum';
 
 const FaqSchema = new Schema(
   {

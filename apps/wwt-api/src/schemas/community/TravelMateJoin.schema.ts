@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { TravelMateJoinStatus } from '../libs/enums/community.enum';
+import { TravelMateJoinStatus } from '../../libs/enums/community.enum';
 
 const TravelMateJoinSchema = new Schema(
   {

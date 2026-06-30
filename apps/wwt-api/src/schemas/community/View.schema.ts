@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { ViewTargetType } from '../libs/enums/community.enum';
+import { ViewTargetType } from '../../libs/enums/community.enum';
 
 const ViewSchema = new Schema(
   {

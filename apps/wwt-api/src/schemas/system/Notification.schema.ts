@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { NotificationReferenceType, NotificationType } from '../libs/enums/notification.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 
 const NotificationSchema = new Schema(
   {
