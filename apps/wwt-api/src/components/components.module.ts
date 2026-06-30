@@ -21,6 +21,7 @@ import { BoardArticleModule } from './board-article/board-article.module';
 import { OpenchatModule } from './openchat/openchat.module';
 import { AiModule } from './ai/ai.module';
 import { FaqModule } from './faq/faq.module';
+import { AgentRequestModule } from './agent-request/agent-request.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { FaqModule } from './faq/faq.module';
     OpenchatModule,
     AiModule,
     FaqModule,
+    AgentRequestModule,
   ],
 })
 export class ComponentsModule {}
