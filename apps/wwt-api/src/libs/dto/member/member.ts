@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
 import {
