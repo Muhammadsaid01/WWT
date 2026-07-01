@@ -1,5 +1,5 @@
 import { registerEnumType } from '@nestjs/graphql';
-
+// Article ENUM
 export enum ArticleCategory {
   FREE = 'FREE',
   TRAVEL_TIP = 'TRAVEL_TIP',
