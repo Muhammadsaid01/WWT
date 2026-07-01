@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { ReviewStatus } from '../../libs/enums/review.enum';
+import { ReviewStatus } from '../../libs/enums/community.enum';
 const ReviewSchema = new Schema(
   {
     bookingId: {
