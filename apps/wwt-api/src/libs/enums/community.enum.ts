@@ -81,3 +81,15 @@ export enum ViewTargetType {
 registerEnumType(ViewTargetType, {
   name: 'ViewTargetType',
 });
+
+// Review ENUM
+
+export enum ReviewStatus {
+  ACTIVE = 'ACTIVE',
+  HIDDEN = 'HIDDEN',
+  DELETED = 'DELETED',
+}
+
+registerEnumType(ReviewStatus, {
+  name: 'ReviewStatus',
+});
