@@ -90,3 +90,28 @@ export class MembersInquiry {
   @Field(() => MISearch, { nullable: true })
   search?: MISearch;
 }
+
+// Input type for updating member status by admin
+@InputType()
+export class UpdateMemberStatusInput {
+  @IsNotEmpty()
+  @Field(() => String)
+  memberId: string;
+
+  @IsNotEmpty()
+  @IsEnum(MemberStatus)
+  @Field(() => MemberStatus)
+  memberStatus: MemberStatus;
+}
+
+@InputType()
+export class UpdateMemberTypeInput {
+  @IsNotEmpty()
+  @Field(() => String)
+  memberId: string;
+
+  @IsNotEmpty()
+  @IsEnum(MemberType)
+  @Field(() => MemberType)
+  memberType: MemberType;
+}

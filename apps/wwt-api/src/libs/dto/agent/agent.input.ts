@@ -46,3 +46,27 @@ export class AgentsInquiry {
   @Field(() => AISearch, { nullable: true })
   search?: AISearch;
 }
+
+@InputType()
+export class UpdateAgentStatusInput {
+  @IsNotEmpty()
+  @Field(() => String)
+  agentId: string;
+
+  @IsNotEmpty()
+  @IsEnum(AgentStatus)
+  @Field(() => AgentStatus)
+  agentStatus: AgentStatus;
+}
+
+@InputType()
+export class UpdateAgentVerificationInput {
+  @IsNotEmpty()
+  @Field(() => String)
+  agentId: string;
+
+  @IsNotEmpty()
+  @IsEnum(AgentVerificationStatus)
+  @Field(() => AgentVerificationStatus)
+  verificationStatus: AgentVerificationStatus;
+}
