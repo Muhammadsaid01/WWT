@@ -1,27 +1,27 @@
 import { Module } from '@nestjs/common';
+import { AgentModule } from './agent/agent.module';
+import { AuthModule } from './auth/auth.module';
+import { BookingModule } from './booking/booking.module';
 import { MemberModule } from './member/member.module';
 import { TravelPackageModule } from './travel-package/travel-package.module';
-import { BookingModule } from './booking/booking.module';
-import { AuthModule } from './auth/auth.module';
-import { AgentModule } from './agent/agent.module';
-import { AdminModule } from './admin/admin.module';
-import { TravelerModule } from './traveler/traveler.module';
-import { PaymentModule } from './payment/payment.module';
-import { ReviewModule } from './review/review.module';
-import { CommentsModule } from './comments/comments.module';
-import { LikesModule } from './likes/likes.module';
-import { FollowModule } from './follow/follow.module';
-import { ViewModule } from './view/view.module';
-import { NotificationModule } from './notification/notification.module';
-import { NoticeModule } from './notice/notice.module';
-import { ReportModule } from './report/report.module';
-import { DiscountModule } from './discount/discount.module';
-import { CommunityModule } from './community/community.module';
-import { BoardArticleModule } from './board-article/board-article.module';
-import { OpenchatModule } from './openchat/openchat.module';
-import { AiModule } from './ai/ai.module';
-import { FaqModule } from './faq/faq.module';
+
 import { AgentRequestModule } from './agent-request/agent-request.module';
+import { AiModule } from './ai/ai.module';
+import { BoardArticleModule } from './board-article/board-article.module';
+import { CommentsModule } from './comments/comments.module';
+import { CommunityModule } from './community/community.module';
+import { DiscountModule } from './discount/discount.module';
+import { FaqModule } from './faq/faq.module';
+import { FollowModule } from './follow/follow.module';
+import { LikesModule } from './likes/likes.module';
+import { NoticeModule } from './notice/notice.module';
+import { NotificationModule } from './notification/notification.module';
+import { OpenchatModule } from './openchat/openchat.module';
+import { PaymentModule } from './payment/payment.module';
+import { ReportModule } from './report/report.module';
+import { ReviewModule } from './review/review.module';
+import { TravelerModule } from './traveler/traveler.module';
+import { ViewModule } from './view/view.module';
 
 @Module({
   imports: [
@@ -30,7 +30,7 @@ import { AgentRequestModule } from './agent-request/agent-request.module';
     BookingModule,
     AuthModule,
     AgentModule,
-    AdminModule,
+    AgentRequestModule,
     TravelerModule,
     PaymentModule,
     ReviewModule,
