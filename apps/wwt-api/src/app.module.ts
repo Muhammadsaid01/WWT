@@ -7,6 +7,7 @@ import { AppResolver } from './app.resolver';
 import { AppService } from './app.service';
 import { ComponentsModule } from './components/components.module';
 import { DatabaseModule } from './database/database.module';
+import { T } from './libs/types/common';
 
 @Module({
   imports: [
@@ -16,6 +17,21 @@ import { DatabaseModule } from './database/database.module';
       playground: true,
       uploads: false,
       autoSchemaFile: true,
+      formatError: (error: T) => {
+        console.error('GraphQL Error:', error);
+
+        const graphQLFormattedError = {
+          code: error?.extensions?.code || 'INTERNAL_SERVER_ERROR',
+
+          message:
+            error?.extensions?.exception?.response?.message ||
+            error?.extension?.response?.message ||
+            error?.message,
+        };
+
+        console.error('Formatted GraphQL Error:', graphQLFormattedError);
+        return graphQLFormattedError;
+      },
     }),
     ComponentsModule,
     DatabaseModule,

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Member } from '../../libs/dto/member/member';
@@ -19,7 +19,7 @@ export class MemberService {
       return result;
     } catch (err) {
       console.log('Error Service modelcreating member:', err);
-      throw new Error('Failed to create member');
+      throw new BadRequestException(Message.USED_MEMBER_NICK_OR_PHONE);
     }
   }
 
