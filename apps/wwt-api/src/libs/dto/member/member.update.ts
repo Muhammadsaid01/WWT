@@ -1,6 +1,6 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsEmail, IsEnum, IsOptional, IsString, Length } from 'class-validator';
-import { MemberLanguage } from '../../enums/member.enum';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { MemberLanguage, MemberStatus, MemberType } from '../../enums/member.enum';
 
 @InputType()
 export class MemberUpdate {
@@ -48,4 +48,38 @@ export class MemberUpdate {
   @IsEnum(MemberLanguage)
   @Field(() => MemberLanguage, { nullable: true })
   memberLanguage?: MemberLanguage;
+}
+//ADMIN UPDATE
+@InputType()
+export class MemberUpdateByAdmin {
+  @IsNotEmpty()
+  @Field(() => String)
+  memberId: string;
+
+  @IsOptional()
+  @IsEnum(MemberStatus)
+  @Field(() => MemberStatus, { nullable: true })
+  memberStatus?: MemberStatus;
+
+  @IsOptional()
+  @IsEnum(MemberType)
+  @Field(() => MemberType, { nullable: true })
+  memberType?: MemberType;
+
+  @IsOptional()
+  @Field(() => String, { nullable: true })
+  memberNick?: string;
+
+  @IsOptional()
+  @Field(() => String, { nullable: true })
+  memberFullName?: string;
+
+  @IsOptional()
+  @Field(() => String, { nullable: true })
+  memberPhone?: string;
+
+  @IsOptional()
+  @IsEmail()
+  @Field(() => String, { nullable: true })
+  memberEmail?: string;
 }
