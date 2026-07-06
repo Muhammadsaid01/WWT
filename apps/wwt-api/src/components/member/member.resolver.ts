@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { ObjectId } from 'mongoose';
 import { Member } from '../../libs/dto/member/member';
 import { LoginInput, MemberInput } from '../../libs/dto/member/member.input';
+import { AuthMember } from '../auth/decorators/authMember.decorator';
+import { AuthGuard } from '../auth/guards/auth.guard';
 import { MemberService } from './member.service';
 
 @Resolver()
@@ -21,10 +25,21 @@ export class MemberResolver {
     console.log('Input:', input);
     return this.memberService.login(input);
   }
+
+  //Checking Authenticated Member
+  @UseGuards(AuthGuard)
+  @Query(() => String)
+  public async checkAuth(@AuthMember('memberNick') memberNick: ObjectId): Promise<string> {
+    console.log('Query: checkAuth');
+    console.log('memberNick:', memberNick);
+    return `Hi, ${memberNick}`;
+  }
   // Authenticated
+  @UseGuards(AuthGuard)
   @Mutation(() => String)
-  public async updateMember(): Promise<string> {
+  public async updateMember(@AuthMember('_id') memberId: ObjectId): Promise<string> {
     console.log('Mutation updateMember');
+    console.log('Authenticated Member:', memberId);
     return this.memberService.updateMember();
   }
 
