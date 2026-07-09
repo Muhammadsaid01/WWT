@@ -1,5 +1,6 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
 import { IsEmail, IsEnum, IsNotEmpty, IsOptional, Length, Min } from 'class-validator';
+import { ObjectId } from 'mongoose';
 import { Direction } from '../../enums/common.enum';
 import { MemberAuthType, MemberLanguage, MemberStatus, MemberType } from '../../enums/member.enum';
 
@@ -38,6 +39,7 @@ export class MemberInput {
   @IsEnum(MemberLanguage)
   @Field(() => MemberLanguage, { nullable: true })
   memberLanguage?: MemberLanguage;
+  private _id: any;
 }
 
 @InputType()
@@ -96,7 +98,7 @@ export class MembersInquiry {
 export class UpdateMemberStatusInput {
   @IsNotEmpty()
   @Field(() => String)
-  memberId: string;
+  _id: ObjectId;
 
   @IsNotEmpty()
   @IsEnum(MemberStatus)
@@ -108,7 +110,7 @@ export class UpdateMemberStatusInput {
 export class UpdateMemberTypeInput {
   @IsNotEmpty()
   @Field(() => String)
-  memberId: string;
+  _id: ObjectId;
 
   @IsNotEmpty()
   @IsEnum(MemberType)

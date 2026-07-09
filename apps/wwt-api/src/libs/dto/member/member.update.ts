@@ -1,9 +1,14 @@
 import { Field, InputType } from '@nestjs/graphql';
 import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { ObjectId } from 'mongoose';
 import { MemberLanguage, MemberStatus, MemberType } from '../../enums/member.enum';
 
 @InputType()
 export class MemberUpdate {
+  @IsNotEmpty()
+  @Field(() => String)
+  _id: string;
+
   @IsOptional()
   @Length(2, 50)
   @Field(() => String, { nullable: true })
@@ -54,7 +59,7 @@ export class MemberUpdate {
 export class MemberUpdateByAdmin {
   @IsNotEmpty()
   @Field(() => String)
-  memberId: string;
+  _id: ObjectId;
 
   @IsOptional()
   @IsEnum(MemberStatus)
