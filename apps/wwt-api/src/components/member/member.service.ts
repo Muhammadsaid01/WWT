@@ -2,19 +2,23 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
+import { ViewInput } from '../../libs/dto/community/view.input';
 import { Member } from '../../libs/dto/member/member';
 import { LoginInput, MemberInput } from '../../libs/dto/member/member.input';
 import { MemberUpdate } from '../../libs/dto/member/member.update';
 import { Message } from '../../libs/enums/common.enum';
+import { ViewTargetType } from '../../libs/enums/community.enum';
 import { MemberStatus } from '../../libs/enums/member.enum';
 import { T } from '../../libs/types/common';
 import { AuthService } from '../auth/auth.service';
+import { ViewService } from '../view/view.service';
 
 @Injectable()
 export class MemberService {
   constructor(
     @InjectModel('Member') private readonly memberModel: Model<Member>,
-    private readonly authService: AuthService,
+    private authService: AuthService,
+    private viewService: ViewService,
   ) {}
 
   public async signup(input: MemberInput): Promise<Member> {
@@ -74,14 +78,29 @@ export class MemberService {
     return result;
   }
 
-  public async getMember(targetId: ObjectId): Promise<Member> {
+  public async getMember(memberId: ObjectId, targetId: ObjectId): Promise<Member> {
     const search: T = {
       _id: targetId,
       memberStatus: MemberStatus.ACTIVE,
     };
-    const targetMember = await this.memberModel.findOne(search).exec();
+    const targetMember = await this.memberModel.findOne(search).lean().exec();
     if (!targetMember) {
       throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+    }
+
+    if (memberId) {
+      const viewInput: ViewInput = {
+        viewerId: memberId,
+        targetId: targetId,
+        targetType: ViewTargetType.MEMBER,
+      };
+      const newView = await this.viewService.recordView(viewInput);
+      if (newView) {
+        await this.memberModel
+          .findOneAndUpdate({ _id: targetId }, { $inc: { memberViewCount: 1 } }, { new: true })
+          .exec();
+        targetMember.memberViewCount++; // Increment the view count in the targetMember object
+      }
     }
     return targetMember;
   }

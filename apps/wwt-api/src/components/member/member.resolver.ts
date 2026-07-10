@@ -10,6 +10,7 @@ import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { WithoutGuard } from '../auth/guards/without.guard';
 import { MemberService } from './member.service';
 
 @Resolver()
@@ -58,12 +59,16 @@ export class MemberResolver {
     console.log('Authenticated Member:', memberId);
     return this.memberService.updateMember(memberId, input);
   }
-
+  @UseGuards(WithoutGuard)
   @Query(() => Member)
-  public async getMember(@Args('memberId') input: string): Promise<Member> {
+  public async getMember(
+    @Args('memberId') input: string,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<Member> {
     console.log('Query getMember');
+    console.log('Input memberId:', memberId);
     const targetId = shapeIntoMongoObjectId(input);
-    return this.memberService.getMember(targetId);
+    return this.memberService.getMember(memberId, targetId);
   }
 
   //** ADMIN **/

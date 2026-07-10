@@ -1,5 +1,6 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
 import { IsEnum, IsNotEmpty, IsOptional, Min } from 'class-validator';
+import { ObjectId } from 'mongoose';
 import { Direction } from '../../enums/common.enum';
 import { ViewTargetType } from '../../enums/community.enum';
 
@@ -7,7 +8,11 @@ import { ViewTargetType } from '../../enums/community.enum';
 export class ViewInput {
   @IsNotEmpty()
   @Field(() => String)
-  targetId: string;
+  viewerId: ObjectId;
+
+  @IsNotEmpty()
+  @Field(() => String)
+  targetId: ObjectId;
 
   @IsNotEmpty()
   @IsEnum(ViewTargetType)
@@ -19,11 +24,11 @@ export class ViewInput {
 class VISearch {
   @IsOptional()
   @Field(() => String, { nullable: true })
-  viewerId?: string;
+  viewerId?: ObjectId;
 
   @IsOptional()
   @Field(() => String, { nullable: true })
-  targetId?: string;
+  targetId?: ObjectId;
 
   @IsOptional()
   @IsEnum(ViewTargetType)
