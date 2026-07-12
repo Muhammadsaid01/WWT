@@ -1,6 +1,7 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
 import { AgentRequestStatus } from '../../enums/agent-request.enum';
+import { TotalCounter } from '../member/member';
 
 @ObjectType()
 export class AgentRequest {
@@ -39,4 +40,13 @@ export class AgentRequest {
 
   @Field(() => Date)
   updatedAt: Date;
+}
+
+@ObjectType()
+export class AgentRequests {
+  @Field(() => [AgentRequest])
+  list: AgentRequest[];
+
+  @Field(() => [TotalCounter], { nullable: true })
+  metaCounter?: TotalCounter[];
 }
