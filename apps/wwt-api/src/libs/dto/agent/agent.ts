@@ -1,7 +1,7 @@
 import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
 import { AgentStatus, AgentVerificationStatus } from '../../enums/agent.enum';
-import { TotalCounter } from '../member/member';
+import { Member, TotalCounter } from '../member/member';
 
 @ObjectType()
 export class Agent {
@@ -10,6 +10,9 @@ export class Agent {
 
   @Field(() => String)
   memberId: ObjectId;
+
+  @Field(() => Member, { nullable: true })
+  memberData?: Member;
 
   @Field(() => String)
   companyName: string;

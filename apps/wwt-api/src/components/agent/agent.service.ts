@@ -1,37 +1,200 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Agent } from '../../libs/dto/agent/agent';
+import { Model, ObjectId } from 'mongoose';
+import { Agent, Agents } from '../../libs/dto/agent/agent';
+import { AgentsInquiry } from '../../libs/dto/agent/agent.input';
+import { AgentUpdate, UpdateAgentByAdmin } from '../../libs/dto/agent/agent.update';
+import { ViewInput } from '../../libs/dto/community/view.input';
+import { Member } from '../../libs/dto/member/member';
+import { AgentStatus } from '../../libs/enums/agent.enum';
+import { Direction, Message } from '../../libs/enums/common.enum';
+import { ViewTargetType } from '../../libs/enums/community.enum';
+import { T } from '../../libs/types/common';
 import { AuthService } from '../auth/auth.service';
+import { ViewService } from '../view/view.service';
 
 @Injectable()
 export class AgentService {
   constructor(
-    @InjectModel('Agent') private readonly memberModel: Model<Agent>,
+    @InjectModel('Agent') private readonly agentModel: Model<Agent>,
+    @InjectModel('Member') private readonly memberModel: Model<Member>,
     private authService: AuthService,
+    private viewService: ViewService,
   ) {}
 
-  public async getAgent(): Promise<string> {
-    return 'getAgent executed';
+  public async getAgent(authMemberId: ObjectId | null, agentId: ObjectId): Promise<Agent> {
+    const targetAgent = await this.agentModel
+      .findOne({
+        _id: agentId,
+        agentStatus: AgentStatus.ACTIVE,
+      })
+      .lean()
+      .exec();
+
+    if (!targetAgent) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    const memberData = await this.memberModel.findById(targetAgent.memberId).lean().exec();
+
+    if (!memberData) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    if (authMemberId) {
+      const viewInput: ViewInput = {
+        viewerId: authMemberId,
+        targetId: targetAgent.memberId,
+        targetType: ViewTargetType.MEMBER,
+      };
+
+      const newView = await this.viewService.recordView(viewInput);
+
+      if (newView) {
+        await this.memberModel
+          .findByIdAndUpdate(targetAgent.memberId, {
+            $inc: { memberViewCount: 1 },
+          })
+          .exec();
+
+        memberData.memberViewCount += 1;
+      }
+    }
+
+    return {
+      ...targetAgent,
+      memberData,
+    } as Agent;
   }
 
-  public async getAgents(): Promise<string> {
-    return 'getAgent executed';
+  public async getAgents(input: AgentsInquiry): Promise<Agents> {
+    console.log(input);
+    const { page, limit } = input;
+
+    const match: T = {
+      agentStatus: AgentStatus.ACTIVE,
+    };
+
+    const result = await this.agentModel
+      .find(match)
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean()
+      .exec();
+
+    for (const agent of result) {
+      const memberData = await this.memberModel.findById(agent.memberId).lean().exec();
+
+      agent.memberData = memberData;
+    }
+
+    const total = await this.agentModel.countDocuments(match);
+
+    return {
+      list: result as Agent[],
+      metaCounter: [{ total }],
+    };
   }
 
-  public async getMyAgentProfile(): Promise<string> {
-    return 'getAgent executed';
+  public async updateAgent(memberId: ObjectId, input: AgentUpdate): Promise<Agent> {
+    try {
+      const updatedAgent = await this.agentModel
+        .findOneAndUpdate(
+          {
+            memberId,
+            agentStatus: AgentStatus.ACTIVE,
+          },
+          {
+            $set: input,
+          },
+          {
+            new: true,
+          },
+        )
+        .lean()
+        .exec();
+
+      if (!updatedAgent) {
+        throw new NotFoundException(Message.NO_DATA_FOUND);
+      }
+
+      return updatedAgent as Agent;
+    } catch (err) {
+      console.error('Error updating agent:', err);
+
+      throw new InternalServerErrorException(Message.UPDATE_FAILED);
+    }
   }
 
-  public async updateAgent(): Promise<string> {
-    return 'getAgent executed';
+  public async getAllAgentsByAdmin(input: AgentsInquiry): Promise<Agents> {
+    const { page, limit, sort, direction, search } = input;
+
+    const match: T = {};
+
+    if (search?.agentStatus) {
+      match.agentStatus = search.agentStatus;
+    }
+
+    if (search?.text) {
+      match.$or = [
+        {
+          companyName: {
+            $regex: search.text,
+            $options: 'i',
+          },
+        },
+        {
+          companyEmail: {
+            $regex: search.text,
+            $options: 'i',
+          },
+        },
+      ];
+    }
+
+    const sortField = sort || 'createdAt';
+    const sortOrder = direction === Direction.ASC ? 1 : -1;
+
+    const result = await this.agentModel
+      .find(match)
+      .sort({ [sortField]: sortOrder })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean()
+      .exec();
+
+    for (const agent of result) {
+      agent.memberData = await this.memberModel.findById(agent.memberId).lean().exec();
+    }
+
+    const total = await this.agentModel.countDocuments(match);
+
+    return {
+      list: result as Agent[],
+      metaCounter: [{ total }],
+    };
   }
 
-  public async getAllAgentsByAdmin(): Promise<string> {
-    return 'getAgent executed';
-  }
+  public async updateAgentByAdmin(input: UpdateAgentByAdmin): Promise<Agent> {
+    const { agentId, ...updateData } = input;
 
-  public async updateAgentByAdmin(): Promise<string> {
-    return 'getAgent executed';
+    const updatedAgent = await this.agentModel
+      .findByIdAndUpdate(
+        agentId,
+        {
+          $set: updateData,
+        },
+        {
+          new: true,
+        },
+      )
+      .lean()
+      .exec();
+
+    if (!updatedAgent) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    return updatedAgent as Agent;
   }
 }

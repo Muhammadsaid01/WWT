@@ -48,7 +48,7 @@ const AgentSchema = new Schema(
       trim: true,
     },
 
-    agentDescription: {
+    agentDesc: {
       type: String,
       default: null,
       trim: true,
