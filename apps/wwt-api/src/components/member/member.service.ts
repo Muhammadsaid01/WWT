@@ -1,14 +1,21 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
+import { Agent } from '../../libs/dto/agent/agent';
 import { ViewInput } from '../../libs/dto/community/view.input';
-import { Member } from '../../libs/dto/member/member';
-import { LoginInput, MemberInput } from '../../libs/dto/member/member.input';
-import { MemberUpdate } from '../../libs/dto/member/member.update';
-import { Message } from '../../libs/enums/common.enum';
+import { Member, Members } from '../../libs/dto/member/member';
+import { LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
+import { MemberUpdate, MemberUpdateByAdmin } from '../../libs/dto/member/member.update';
+import { AgentStatus } from '../../libs/enums/agent.enum';
+import { Direction, Message } from '../../libs/enums/common.enum';
 import { ViewTargetType } from '../../libs/enums/community.enum';
-import { MemberStatus } from '../../libs/enums/member.enum';
+import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { T } from '../../libs/types/common';
 import { AuthService } from '../auth/auth.service';
 import { ViewService } from '../view/view.service';
@@ -17,6 +24,8 @@ import { ViewService } from '../view/view.service';
 export class MemberService {
   constructor(
     @InjectModel('Member') private readonly memberModel: Model<Member>,
+
+    @InjectModel('Agent') private readonly agentModel: Model<Agent>,
     private authService: AuthService,
     private viewService: ViewService,
   ) {}
@@ -59,25 +68,6 @@ export class MemberService {
     return response;
   }
 
-  public async updateMember(memberId: ObjectId, input: MemberUpdate): Promise<Member> {
-    const result = await this.memberModel
-      .findOneAndUpdate(
-        {
-          _id: memberId,
-          memberStatus: MemberStatus.ACTIVE,
-        },
-        input,
-        { new: true },
-      )
-      .exec();
-    if (!result) {
-      throw new InternalServerErrorException(Message.UPDATE_FAILED);
-    }
-
-    result.accessToken = await this.authService.createToken(result);
-    return result;
-  }
-
   public async getMember(memberId: ObjectId, targetId: ObjectId): Promise<Member> {
     const search: T = {
       _id: targetId,
@@ -105,11 +95,180 @@ export class MemberService {
     return targetMember;
   }
 
-  public async getAllMembersByAdmin(): Promise<string> {
-    return 'getAllMembersByAdmin executed!';
+  public async getMyProfile(memberId: ObjectId): Promise<Member> {
+    const member = await this.memberModel
+      .findOne({
+        _id: memberId,
+        memberStatus: MemberStatus.ACTIVE,
+      })
+      .lean()
+      .exec();
+
+    if (!member) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    let agentData: Agent | null = null;
+
+    if (member.memberType === MemberType.AGENT) {
+      agentData = await this.agentModel
+        .findOne({
+          memberId,
+          agentStatus: AgentStatus.ACTIVE,
+        })
+        .lean()
+        .exec();
+    }
+
+    return {
+      ...member,
+      agentData,
+    } as Member;
   }
 
-  public async updateMemberByAdmin(): Promise<string> {
-    return 'updateMemberByAdmin executed!';
+  public async updateMember(memberId: ObjectId, input: MemberUpdate): Promise<Member> {
+    const result = await this.memberModel
+      .findOneAndUpdate(
+        {
+          _id: memberId,
+          memberStatus: MemberStatus.ACTIVE,
+        },
+        input,
+        { new: true },
+      )
+      .exec();
+    if (!result) {
+      throw new InternalServerErrorException(Message.UPDATE_FAILED);
+    }
+
+    result.accessToken = await this.authService.createToken(result);
+    return result;
+  }
+
+  public async deleteMember(memberId: ObjectId): Promise<Member> {
+    const deletedMember = await this.memberModel
+      .findOneAndUpdate(
+        {
+          _id: memberId,
+          memberStatus: {
+            $ne: MemberStatus.DELETED,
+          },
+        },
+        {
+          $set: {
+            memberStatus: MemberStatus.DELETED,
+            memberDeletedAt: new Date(),
+          },
+        },
+        {
+          new: true,
+        },
+      )
+      .lean()
+      .exec();
+
+    if (!deletedMember) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    return deletedMember as Member;
+  }
+
+  public async getAllMembersByAdmin(input: MembersInquiry): Promise<Members> {
+    const { memberStatus, memberType, text } = input.search ?? {};
+
+    const match: T = {};
+
+    const sort: T = {
+      [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
+    };
+
+    if (memberStatus) {
+      match.memberStatus = memberStatus;
+    }
+
+    if (memberType) {
+      match.memberType = memberType;
+    }
+
+    if (text) {
+      match.$or = [
+        {
+          memberNick: {
+            $regex: text,
+            $options: 'i',
+          },
+        },
+        {
+          memberFullName: {
+            $regex: text,
+            $options: 'i',
+          },
+        },
+        {
+          memberEmail: {
+            $regex: text,
+            $options: 'i',
+          },
+        },
+        {
+          memberPhone: {
+            $regex: text,
+            $options: 'i',
+          },
+        },
+      ];
+    }
+
+    const result = await this.memberModel.aggregate([
+      {
+        $match: match,
+      },
+      {
+        $sort: sort,
+      },
+      {
+        $facet: {
+          list: [
+            {
+              $skip: (input.page - 1) * input.limit,
+            },
+            {
+              $limit: input.limit,
+            },
+          ],
+          metaCounter: [
+            {
+              $count: 'total',
+            },
+          ],
+        },
+      },
+    ]);
+
+    return result[0];
+  }
+  public async updateMemberByAdmin(input: MemberUpdateByAdmin): Promise<Member> {
+    const { memberId, ...updateData } = input;
+
+    const updatedMember = await this.memberModel
+      .findByIdAndUpdate(
+        memberId,
+        {
+          $set: updateData,
+        },
+        {
+          new: true,
+          runValidators: true,
+        },
+      )
+      .lean()
+      .exec();
+
+    if (!updatedMember) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    return updatedMember as Member;
   }
 }

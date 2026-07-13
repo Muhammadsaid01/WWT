@@ -70,6 +70,36 @@ export class Agent {
 }
 
 @ObjectType()
+export class AgentProfileData {
+  @Field(() => String)
+  _id: ObjectId;
+
+  @Field(() => String)
+  memberId: ObjectId;
+
+  @Field(() => String)
+  companyName: string;
+
+  @Field(() => String)
+  businessNumber: string;
+
+  @Field(() => String)
+  licenseNumber: string;
+
+  @Field(() => String, { nullable: true })
+  officeAddress?: string;
+
+  @Field(() => String, { nullable: true })
+  companyPhone?: string;
+
+  @Field(() => String, { nullable: true })
+  companyEmail?: string;
+
+  @Field(() => String, { nullable: true })
+  agentDesc?: string;
+}
+
+@ObjectType()
 export class Agents {
   @Field(() => [Agent])
   list: Agent[];
