@@ -130,7 +130,9 @@ export class TravelPackageResolver {
     return this.travelService.deleteTravelPackageByAdmin(input._id);
   }
 
-  //PackageSchedules
+  // ================================
+  // Package Schedule
+  // ================================
 
   @Mutation(() => String)
   public async createPackageSchedule(): Promise<string> {
@@ -162,7 +164,9 @@ export class TravelPackageResolver {
     return this.travelService.updatePackageScheduleByAdmin();
   }
 
-  //Itinerary
+  // ================================
+  // Itinerary
+  // ================================
 
   @Mutation(() => String)
   public async createItinerary(): Promise<string> {

@@ -34,8 +34,15 @@ const PackageScheduleSchema = new Schema(
   { timestamps: true, collection: 'packageSchedules' },
 );
 
-PackageScheduleSchema.index({ packageId: 1 });
-PackageScheduleSchema.index({ startDate: 1 });
+PackageScheduleSchema.index(
+  {
+    packageId: 1,
+    startDate: 1,
+  },
+  {
+    unique: true,
+  },
+);
 PackageScheduleSchema.index({ scheduleStatus: 1 });
 
 export default PackageScheduleSchema;
