@@ -217,3 +217,40 @@ export class UpdatePackageStatusInput {
   @Field(() => PackageStatus)
   packageStatus: PackageStatus;
 }
+
+@InputType()
+class ATPISearch {
+  @IsOptional()
+  @IsEnum(PackageStatus)
+  @Field(() => PackageStatus, { nullable: true })
+  packageStatus?: PackageStatus;
+}
+
+@InputType()
+export class AgentTravelPackagesInquiry {
+  @IsNotEmpty()
+  @Min(1)
+  @Field(() => Int)
+  page: number;
+
+  @IsNotEmpty()
+  @Min(1)
+  @Field(() => Int)
+  limit: number;
+
+  @IsOptional()
+  @IsIn(availablePackageSorts)
+  @Field(() => String, { nullable: true })
+  sort?: string;
+
+  @IsOptional()
+  @IsEnum(Direction)
+  @Field(() => Direction, { nullable: true })
+  direction?: Direction;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ATPISearch)
+  @Field(() => ATPISearch, { nullable: true })
+  search?: ATPISearch;
+}

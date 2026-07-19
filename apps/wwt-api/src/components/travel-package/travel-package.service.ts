@@ -12,6 +12,7 @@ import { lookupAgent, unwindAgent } from '../../libs/config';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
+  AgentTravelPackagesInquiry,
   TravelPackageInput,
   TravelPackagesInquiry,
 } from '../../libs/dto/travel-package/travel-package.input';
@@ -102,8 +103,44 @@ export class TravelPackageService {
     return 'deleteTravelPackage executed!';
   }
 
-  public async getMyTravelPackages(): Promise<string> {
-    return 'getMyTravelPackages executed!';
+  public async getMyTravelPackages(
+    memberId: ObjectId,
+    input: AgentTravelPackagesInquiry,
+  ): Promise<TravelPackages> {
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    const packageStatus = input.search?.packageStatus;
+
+    if (packageStatus === PackageStatus.DELETED) {
+      throw new BadRequestException(Message.NOT_ALLOWED_REQUEST);
+    }
+
+    const match: FilterQuery<TravelPackage> = {
+      agentId: agent._id,
+      packageStatus: packageStatus ?? { $ne: PackageStatus.DELETED },
+    };
+
+    const sort = {
+      [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
+    };
+
+    const result = await this.packageModel.aggregate([
+      { $match: match },
+      { $sort: sort },
+      {
+        $facet: {
+          list: [
+            { $skip: (input.page - 1) * input.limit },
+            { $limit: input.limit },
+            lookupAgent,
+            unwindAgent,
+          ],
+          metaCounter: [{ $count: 'total' }],
+        },
+      },
+    ]);
+
+    return result[0];
   }
 
   public async getTravelPackage(

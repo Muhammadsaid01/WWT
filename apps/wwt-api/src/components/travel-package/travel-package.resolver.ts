@@ -5,6 +5,7 @@ import { ObjectId } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
+  AgentTravelPackagesInquiry,
   TravelPackageInput,
   TravelPackagesInquiry,
 } from '../../libs/dto/travel-package/travel-package.input';
@@ -55,9 +56,13 @@ export class TravelPackageResolver {
 
   @Roles(MemberType.AGENT)
   @UseGuards(RolesGuard)
-  @Query(() => String)
-  public async getMyTravelPackages(): Promise<string> {
-    return this.travelService.getMyTravelPackages();
+  @Query(() => TravelPackages)
+  public async getMyTravelPackages(
+    @Args('input') input: AgentTravelPackagesInquiry,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackages> {
+    console.log('getMyTravelPackages executed!');
+    return this.travelService.getMyTravelPackages(memberId, input);
   }
 
   /** PUBLIC **/
