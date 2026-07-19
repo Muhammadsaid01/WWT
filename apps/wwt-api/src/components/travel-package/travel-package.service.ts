@@ -10,6 +10,12 @@ import moment from 'moment';
 import { FilterQuery, Model, ObjectId } from 'mongoose';
 import { lookupAgent, unwindAgent } from '../../libs/config';
 import { ViewInput } from '../../libs/dto/community/view.input';
+import { Itinerary } from '../../libs/dto/travel-package/itinerary';
+import { PackageExclude } from '../../libs/dto/travel-package/package-exclude';
+import { PackageInclude } from '../../libs/dto/travel-package/package-include';
+import { PackagePolicy } from '../../libs/dto/travel-package/package-policy';
+import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
+import { PackageTag } from '../../libs/dto/travel-package/package-tag';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
   AgentTravelPackagesInquiry,
@@ -33,6 +39,25 @@ import { ViewService } from '../view/view.service';
 export class TravelPackageService {
   constructor(
     @InjectModel('TravelPackage') private readonly packageModel: Model<TravelPackage>,
+
+    @InjectModel('PackageSchedule')
+    private readonly packageScheduleModel: Model<PackageSchedule>,
+
+    @InjectModel('Itinerary')
+    private readonly itineraryModel: Model<Itinerary>,
+
+    @InjectModel('PackageInclude')
+    private readonly packageIncludeModel: Model<PackageInclude>,
+
+    @InjectModel('PackageExclude')
+    private readonly packageExcludeModel: Model<PackageExclude>,
+
+    @InjectModel('PackageTag')
+    private readonly packageTagModel: Model<PackageTag>,
+
+    @InjectModel('PackagePolicy')
+    private readonly packagePolicyModel: Model<PackagePolicy>,
+
     private readonly agentService: AgentService,
     private readonly memberService: MemberService,
     private readonly viewService: ViewService,
@@ -359,12 +384,64 @@ export class TravelPackageService {
     return result[0];
   }
 
-  public async updateTravelPackageByAdmin(): Promise<string> {
-    return 'updateTravelPackageByAdmin executed!';
+  public async updateTravelPackageByAdmin(input: TravelPackageUpdate): Promise<TravelPackage> {
+    let { soldAt, deletedAt } = input;
+
+    const { packageStatus } = input;
+
+    const search: T = {
+      _id: input._id,
+      packageStatus: PackageStatus.ACTIVE,
+    };
+    if (packageStatus === PackageStatus.SOLD) soldAt = moment().toDate();
+    else if (packageStatus === PackageStatus.DELETED) deletedAt = moment().toDate();
+    const result = await this.packageModel
+      .findOneAndUpdate(search, input, {
+        new: true,
+      })
+      .exec();
+    if (!result) throw new BadRequestException(Message.UPDATE_FAILED);
+
+    if (soldAt || deletedAt) {
+      await this.agentService.agentStatsEditor({
+        _id: result.agentId,
+        targetKey: 'agentPackageCount',
+        modifier: -1,
+      });
+    }
+
+    return result;
   }
 
-  public async deleteTravelPackageByAdmin(): Promise<string> {
-    return 'deleteTravelPackageByAdmin executed!';
+  public async deleteTravelPackageByAdmin(packageId: ObjectId): Promise<TravelPackage> {
+    const targetPackage = await this.packageModel.findById(packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    await Promise.all([
+      this.packageScheduleModel.deleteMany({ packageId }),
+      this.itineraryModel.deleteMany({ packageId }),
+      this.packageIncludeModel.deleteMany({ packageId }),
+      this.packageExcludeModel.deleteMany({ packageId }),
+      this.packageTagModel.deleteMany({ packageId }),
+      this.packagePolicyModel.deleteMany({ packageId }),
+    ]);
+
+    const deletedPackage = await this.packageModel.findByIdAndDelete(packageId);
+
+    if (!deletedPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    await this.agentService.agentStatsEditor({
+      _id: targetPackage.agentId,
+      targetKey: 'agentPackageCount',
+      modifier: -1,
+    });
+
+    return deletedPackage;
   }
 
   //Schedule

@@ -107,15 +107,27 @@ export class TravelPackageResolver {
     console.log('Query: getTravelPackagesByAdmin!');
     return this.travelService.getAllTravelPackagesByAdmin(memberId, input);
   }
-
-  @Mutation(() => String)
-  public async updateTravelPackageByAdmin(): Promise<string> {
-    return this.travelService.updateTravelPackageByAdmin();
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Mutation(() => TravelPackage)
+  public async updateTravelPackageByAdmin(
+    @Args('input') input: TravelPackageUpdate,
+  ): Promise<TravelPackage> {
+    console.log('Query: updateTravelPackageByAdmin!');
+    input._id = shapeIntoMongoObjectId(input._id);
+    return this.travelService.updateTravelPackageByAdmin(input);
   }
 
-  @Mutation(() => String)
-  public async deleteTravelPackageByAdmin(): Promise<string> {
-    return this.travelService.deleteTravelPackageByAdmin();
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Mutation(() => TravelPackage)
+  public async deleteTravelPackageByAdmin(
+    @Args('input') input: DeleteTravelPackageInput,
+  ): Promise<TravelPackage> {
+    console.log('Mutation: deleteTravelPackageByAdmin!');
+
+    input._id = shapeIntoMongoObjectId(input._id);
+    return this.travelService.deleteTravelPackageByAdmin(input._id);
   }
 
   //PackageSchedules
