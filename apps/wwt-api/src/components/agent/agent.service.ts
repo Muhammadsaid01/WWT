@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
 import { Agent, Agents } from '../../libs/dto/agent/agent';
@@ -6,10 +11,10 @@ import { AgentsInquiry } from '../../libs/dto/agent/agent.input';
 import { AgentUpdate, UpdateAgentByAdmin } from '../../libs/dto/agent/agent.update';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Member } from '../../libs/dto/member/member';
-import { AgentStatus } from '../../libs/enums/agent.enum';
+import { AgentStatus, AgentVerificationStatus } from '../../libs/enums/agent.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { ViewTargetType } from '../../libs/enums/community.enum';
-import { T } from '../../libs/types/common';
+import { StatisticModifier, T } from '../../libs/types/common';
 import { AuthService } from '../auth/auth.service';
 import { ViewService } from '../view/view.service';
 
@@ -196,5 +201,39 @@ export class AgentService {
     }
 
     return updatedAgent as Agent;
+  }
+
+  public async findAgentByMemberId(memberId: ObjectId): Promise<Agent> {
+    const agent = await this.agentModel
+      .findOne({
+        memberId,
+        agentStatus: AgentStatus.ACTIVE,
+        verificationStatus: AgentVerificationStatus.APPROVED,
+      })
+      .exec();
+
+    if (!agent) {
+      throw new BadRequestException('Active and approved agent profile not found');
+    }
+
+    return agent;
+  }
+
+  public async agentStatsEditor(input: StatisticModifier): Promise<Agent> {
+    const { _id, targetKey, modifier } = input;
+    const result = await this.agentModel
+      .findByIdAndUpdate(
+        _id,
+        {
+          $inc: { [targetKey]: modifier },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!result) {
+      throw new InternalServerErrorException(Message.UPDATE_FAILED);
+    }
+
+    return result;
   }
 }

@@ -8,7 +8,6 @@ import {
   PackageType,
   TransportType,
 } from '../../enums/package.enum';
-
 @InputType()
 export class TravelPackageInput {
   @IsNotEmpty()
