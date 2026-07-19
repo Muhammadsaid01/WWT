@@ -3,6 +3,8 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
+import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
+import { PackageScheduleInput } from '../../libs/dto/travel-package/package-schedule.input';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
   AgentTravelPackagesInquiry,
@@ -134,9 +136,18 @@ export class TravelPackageResolver {
   // Package Schedule
   // ================================
 
-  @Mutation(() => String)
-  public async createPackageSchedule(): Promise<string> {
-    return this.travelService.createPackageSchedule();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageSchedule)
+  public async createPackageSchedule(
+    @Args('input') input: PackageScheduleInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageSchedule> {
+    console.log('Mutation: createPackageSchedule');
+
+    input.packageId = shapeIntoMongoObjectId(input.packageId);
+
+    return await this.travelService.createPackageSchedule(memberId, input);
   }
 
   @Mutation(() => String)

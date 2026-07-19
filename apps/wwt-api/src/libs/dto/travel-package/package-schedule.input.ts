@@ -8,6 +8,7 @@ import {
   IsOptional,
   Min,
 } from 'class-validator';
+import { ObjectId } from 'mongoose';
 import { ScheduleStatus } from '../../enums/package.enum';
 
 @InputType()
@@ -15,7 +16,7 @@ export class PackageScheduleInput {
   @IsNotEmpty()
   @IsMongoId()
   @Field(() => String)
-  packageId: string;
+  packageId: ObjectId;
 
   @IsNotEmpty()
   @IsDateString()

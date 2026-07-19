@@ -18,7 +18,7 @@ import { NoticeModule } from './notice/notice.module';
 import { NotificationModule } from './notification/notification.module';
 import { OpenchatModule } from './openchat/openchat.module';
 import { PaymentModule } from './payment/payment.module';
-import { ReportModule } from './report/report.module';
+import { ReportModule } from './review/report.module';
 import { ReviewModule } from './review/review.module';
 import { TravelerModule } from './traveler/traveler.module';
 import { ViewModule } from './view/view.module';

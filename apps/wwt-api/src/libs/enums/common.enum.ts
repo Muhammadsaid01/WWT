@@ -20,6 +20,7 @@ export enum Message {
   PROVIDE_ALLOWED_FORMAT = 'Please provide jpg, ipeg or png images!',
   SELF_SUBSCRIPTION_DENIED = 'Self subscription is denied!',
   SENDED_REQUEST = 'You already have a pending agent request!',
+  NOT_AUTHORIZED = 'You are not Authorized, please ask to admin first!',
 }
 
 export enum Direction {

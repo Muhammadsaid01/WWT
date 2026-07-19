@@ -1,6 +1,7 @@
 /* eslint-disable prettier/prettier */
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -15,6 +16,7 @@ import { PackageExclude } from '../../libs/dto/travel-package/package-exclude';
 import { PackageInclude } from '../../libs/dto/travel-package/package-include';
 import { PackagePolicy } from '../../libs/dto/travel-package/package-policy';
 import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
+import { PackageScheduleInput } from '../../libs/dto/travel-package/package-schedule.input';
 import { PackageTag } from '../../libs/dto/travel-package/package-tag';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
@@ -446,14 +448,57 @@ export class TravelPackageService {
 
   //Schedule
 
-  public async createPackageSchedule(): Promise<string> {
-    return 'createPackageSchedule executed!';
+  public async createPackageSchedule(
+    memberId: ObjectId,
+    input: PackageScheduleInput,
+  ): Promise<PackageSchedule> {
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    console.log('agent:', agent);
+    const targetPackage = await this.packageModel.findOne({
+      _id: input.packageId,
+      packageStatus: PackageStatus.ACTIVE,
+    });
+    console.log('targetPackage:', targetPackage);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    if (String(targetPackage.agentId) !== String(agent._id)) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    const startDate = new Date(input.startDate);
+    const endDate = new Date(input.endDate);
+
+    if (startDate >= endDate) {
+      throw new BadRequestException('Start date must be earlier than end date.');
+    }
+    const existing = await this.packageScheduleModel.findOne({
+      packageId: input.packageId,
+      startDate,
+      endDate,
+    });
+
+    if (existing) {
+      throw new BadRequestException('Package schedule already exists.');
+    }
+
+    const result = await this.packageScheduleModel.create({
+      ...input,
+      startDate,
+      endDate,
+    });
+    return result;
   }
 
   public async updatePackageSchedule(): Promise<string> {
     return 'updatePackageSchedule executed!';
   }
-
+  public async getPackageSchedules(): Promise<string> {
+    return 'getPackageSchedules executed!';
+  }
   public async deletePackageSchedule(): Promise<string> {
     return 'deletePackageSchedule executed!';
   }
@@ -464,10 +509,6 @@ export class TravelPackageService {
 
   public async updatePackageScheduleByAdmin(): Promise<string> {
     return 'updatePackageScheduleByAdmin executed!';
-  }
-
-  public async getPackageSchedules(): Promise<string> {
-    return 'getPackageSchedules executed!';
   }
 
   //Itinerary
