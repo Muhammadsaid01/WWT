@@ -7,6 +7,7 @@ import {
   PackageType,
   TransportType,
 } from '../../enums/package.enum';
+import { Agent } from '../agent/agent';
 import { TotalCounter } from '../member/member';
 
 @ObjectType()
@@ -103,8 +104,11 @@ export class TravelPackage {
 
   @Field(() => Date)
   updatedAt: Date;
-}
 
+  /** from aggregation **/
+  @Field(() => Agent, { nullable: true })
+  agentData?: Agent;
+}
 @ObjectType()
 export class TravelPackages {
   @Field(() => [TravelPackage])

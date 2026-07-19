@@ -2,12 +2,14 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
+import { shapeIntoMongoObjectId } from '../../libs/config';
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { TravelPackageInput } from '../../libs/dto/travel-package/travel-package.input';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { WithoutGuard } from '../auth/guards/without.guard';
 import { TravelPackageService } from './travel-package.service';
 
 @Resolver()
@@ -50,10 +52,15 @@ export class TravelPackageResolver {
   }
 
   /** PUBLIC **/
-
-  @Query(() => String)
-  public async getTravelPackage(): Promise<string> {
-    return this.travelService.getTravelPackage();
+  @UseGuards(WithoutGuard)
+  @Query(() => TravelPackage)
+  public async getTravelPackage(
+    @Args('input') input: string,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackage> {
+    console.log('Mutation: getTravelPackage!');
+    const packageId = shapeIntoMongoObjectId(input);
+    return this.travelService.getTravelPackage(memberId, packageId);
   }
 
   @Query(() => String)

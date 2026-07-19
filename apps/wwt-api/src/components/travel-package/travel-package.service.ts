@@ -1,16 +1,30 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+/* eslint-disable prettier/prettier */
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId } from 'mongoose';
+import { FilterQuery, Model, ObjectId } from 'mongoose';
+import { ViewInput } from '../../libs/dto/community/view.input';
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { TravelPackageInput } from '../../libs/dto/travel-package/travel-package.input';
 import { Message } from '../../libs/enums/common.enum';
+import { ViewTargetType } from '../../libs/enums/community.enum';
+import { PackageStatus } from '../../libs/enums/package.enum';
+import { StatisticModifier } from '../../libs/types/common';
 import { AgentService } from '../agent/agent.service';
+import { MemberService } from '../member/member.service';
+import { ViewService } from '../view/view.service';
 
 @Injectable()
 export class TravelPackageService {
   constructor(
     @InjectModel('TravelPackage') private readonly packageModel: Model<TravelPackage>,
     private readonly agentService: AgentService,
+    private readonly memberService: MemberService,
+    private readonly viewService: ViewService,
   ) {}
 
   public async createTravelPackage(
@@ -49,8 +63,50 @@ export class TravelPackageService {
     return 'getMyTravelPackages executed!';
   }
 
-  public async getTravelPackage(): Promise<string> {
-    return 'getTravelPackage executed!';
+  public async getTravelPackage(
+    memberId: ObjectId | null,
+    packageId: ObjectId,
+  ): Promise<TravelPackage> {
+    const search: FilterQuery<TravelPackage> = {
+      _id: packageId,
+      packageStatus: PackageStatus.ACTIVE,
+    };
+
+    const targetPackage = await this.packageModel.findOne(search).lean().exec();
+
+    if (!targetPackage) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    if (memberId) {
+      const viewInput: ViewInput = {
+        viewerId: memberId,
+        targetId: packageId,
+        targetType: ViewTargetType.PACKAGE,
+      };
+
+      const newView = await this.viewService.recordView(viewInput);
+
+      if (newView) {
+        await this.packageStatsEditor({
+          _id: packageId,
+          targetKey: 'packageViewCount',
+          modifier: 1,
+        });
+
+        targetPackage.packageViewCount = (targetPackage.packageViewCount ?? 0) + 1;
+      }
+
+      // TODO: meLiked
+    }
+
+    const agent = await this.agentService.findAgentById(targetPackage.agentId);
+
+    agent.memberData = await this.memberService.findMemberById(agent.memberId);
+
+    targetPackage.agentData = agent;
+
+    return targetPackage;
   }
 
   public async getTravelPackages(): Promise<string> {
@@ -208,5 +264,23 @@ export class TravelPackageService {
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-');
+  }
+
+  public async packageStatsEditor(input: StatisticModifier): Promise<TravelPackage> {
+    const { _id, targetKey, modifier } = input;
+    const result = await this.packageModel
+      .findByIdAndUpdate(
+        _id,
+        {
+          $inc: { [targetKey]: modifier },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!result) {
+      throw new InternalServerErrorException(Message.UPDATE_FAILED);
+    }
+
+    return result;
   }
 }

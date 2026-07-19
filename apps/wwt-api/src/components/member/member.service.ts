@@ -271,4 +271,14 @@ export class MemberService {
 
     return updatedMember as Member;
   }
+
+  public async findMemberById(memberId: ObjectId): Promise<Member> {
+    const member = await this.memberModel.findById(memberId).lean().exec();
+
+    if (!member) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    return member;
+  }
 }

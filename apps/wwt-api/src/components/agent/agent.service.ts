@@ -236,4 +236,20 @@ export class AgentService {
 
     return result;
   }
+
+  public async findAgentById(agentId: ObjectId): Promise<Agent> {
+    const agent = await this.agentModel
+      .findOne({
+        _id: agentId,
+        agentStatus: AgentStatus.ACTIVE,
+      })
+      .lean()
+      .exec();
+
+    if (!agent) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    return agent;
+  }
 }
