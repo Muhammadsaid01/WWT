@@ -118,3 +118,10 @@ export class TravelPackageUpdate {
 
   deletedAt?: Date;
 }
+
+@InputType()
+export class DeleteTravelPackageInput {
+  @IsNotEmpty()
+  @Field(() => String)
+  _id: ObjectId;
+}

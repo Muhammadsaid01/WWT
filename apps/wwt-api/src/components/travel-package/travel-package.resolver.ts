@@ -6,10 +6,14 @@ import { shapeIntoMongoObjectId } from '../../libs/config';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
   AgentTravelPackagesInquiry,
+  AllTravelPackagesInquiry,
   TravelPackageInput,
   TravelPackagesInquiry,
 } from '../../libs/dto/travel-package/travel-package.input';
-import { TravelPackageUpdate } from '../../libs/dto/travel-package/travel-package.update';
+import {
+  DeleteTravelPackageInput,
+  TravelPackageUpdate,
+} from '../../libs/dto/travel-package/travel-package.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -49,9 +53,14 @@ export class TravelPackageResolver {
 
   @Roles(MemberType.AGENT)
   @UseGuards(RolesGuard)
-  @Mutation(() => String)
-  public async deleteTravelPackage(): Promise<string> {
-    return this.travelService.deleteTravelPackage();
+  @Mutation(() => TravelPackage)
+  public async deleteTravelPackage(
+    @Args('input') input: DeleteTravelPackageInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackage> {
+    console.log('Mutation: deleteTravelPackage!');
+    input._id = shapeIntoMongoObjectId(input._id);
+    return this.travelService.deleteTravelPackage(memberId, input);
   }
 
   @Roles(MemberType.AGENT)
@@ -88,10 +97,15 @@ export class TravelPackageResolver {
   }
 
   /** ADMIN  **/
-
-  @Query(() => String)
-  public async getAllTravelPackagesByAdmin(): Promise<string> {
-    return this.travelService.getAllTravelPackagesByAdmin();
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => TravelPackages)
+  public async getAllTravelPackagesByAdmin(
+    @Args('input') input: AllTravelPackagesInquiry,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackages> {
+    console.log('Query: getTravelPackagesByAdmin!');
+    return this.travelService.getAllTravelPackagesByAdmin(memberId, input);
   }
 
   @Mutation(() => String)

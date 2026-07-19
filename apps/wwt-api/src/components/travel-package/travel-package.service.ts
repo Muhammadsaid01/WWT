@@ -13,14 +13,18 @@ import { ViewInput } from '../../libs/dto/community/view.input';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
   AgentTravelPackagesInquiry,
+  AllTravelPackagesInquiry,
   TravelPackageInput,
   TravelPackagesInquiry,
 } from '../../libs/dto/travel-package/travel-package.input';
-import { TravelPackageUpdate } from '../../libs/dto/travel-package/travel-package.update';
+import {
+  DeleteTravelPackageInput,
+  TravelPackageUpdate,
+} from '../../libs/dto/travel-package/travel-package.update';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { ViewTargetType } from '../../libs/enums/community.enum';
 import { PackageStatus } from '../../libs/enums/package.enum';
-import { StatisticModifier } from '../../libs/types/common';
+import { StatisticModifier, T } from '../../libs/types/common';
 import { AgentService } from '../agent/agent.service';
 import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
@@ -99,8 +103,40 @@ export class TravelPackageService {
     return result;
   }
 
-  public async deleteTravelPackage(): Promise<string> {
-    return 'deleteTravelPackage executed!';
+  public async deleteTravelPackage(
+    memberId: ObjectId,
+    input: DeleteTravelPackageInput,
+  ): Promise<TravelPackage> {
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    const result = await this.packageModel.findOneAndUpdate(
+      {
+        _id: input._id,
+        agentId: agent._id,
+        packageStatus: { $ne: PackageStatus.DELETED },
+      },
+      {
+        $set: {
+          packageStatus: PackageStatus.DELETED,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    await this.agentService.agentStatsEditor({
+      _id: agent._id,
+      targetKey: 'agentPackageCount',
+      modifier: -1,
+    });
+
+    return result;
   }
 
   public async getMyTravelPackages(
@@ -290,8 +326,37 @@ export class TravelPackageService {
     }
   }
 
-  public async getAllTravelPackagesByAdmin(): Promise<string> {
-    return 'getAllTravelPackagesByAdmin executed!';
+  public async getAllTravelPackagesByAdmin(
+    memberId: ObjectId,
+    input: AllTravelPackagesInquiry,
+  ): Promise<TravelPackages> {
+    const { packageStatus, destinationCountryList } = input.search;
+    const match: T = {};
+    const sort: T = { [input?.sort ?? 'createdAt']: input?.direction ?? Direction.DESC };
+
+    if (packageStatus) match.packageStatus = packageStatus;
+    if (destinationCountryList) match.destinationCountryList = { $in: destinationCountryList };
+
+    const result = await this.packageModel
+      .aggregate([
+        { $match: match },
+        { $sort: sort },
+        {
+          $facet: {
+            list: [
+              { $skip: (input.page - 1) * input.limit },
+              { $limit: input.limit },
+              lookupAgent,
+              unwindAgent,
+            ],
+            metaCounter: [{ $count: 'total' }],
+          },
+        },
+      ])
+      .exec();
+    if (!result.length) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+
+    return result[0];
   }
 
   public async updateTravelPackageByAdmin(): Promise<string> {

@@ -32,7 +32,25 @@ export class LoggingInterceptor implements NestInterceptor {
     return next.handle();
   }
 
-  private stringify(context: ExecutionContext): string {
-    return JSON.stringify(context).slice(0, 75);
+  private stringify(value: unknown): string {
+    if (value === undefined) {
+      return 'undefined';
+    }
+
+    if (value === null) {
+      return 'null';
+    }
+
+    try {
+      const serialized = JSON.stringify(value);
+
+      if (serialized === undefined) {
+        return String(value);
+      }
+
+      return serialized.slice(0, 100);
+    } catch {
+      return String(value).slice(0, 100);
+    }
   }
 }

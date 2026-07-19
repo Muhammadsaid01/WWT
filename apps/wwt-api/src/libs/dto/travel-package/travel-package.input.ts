@@ -254,3 +254,44 @@ export class AgentTravelPackagesInquiry {
   @Field(() => ATPISearch, { nullable: true })
   search?: ATPISearch;
 }
+
+@InputType()
+class ALTPISearch {
+  @IsOptional()
+  @IsEnum(PackageStatus)
+  @Field(() => PackageStatus, { nullable: true })
+  packageStatus?: PackageStatus;
+
+  @IsOptional()
+  @Field(() => [String], { nullable: true })
+  destinationCountryList?: string[];
+}
+
+@InputType()
+export class AllTravelPackagesInquiry {
+  @IsNotEmpty()
+  @Min(1)
+  @Field(() => Int)
+  page: number;
+
+  @IsNotEmpty()
+  @Min(1)
+  @Field(() => Int)
+  limit: number;
+
+  @IsOptional()
+  @IsIn(availablePackageSorts)
+  @Field(() => String, { nullable: true })
+  sort?: string;
+
+  @IsOptional()
+  @IsEnum(Direction)
+  @Field(() => Direction, { nullable: true })
+  direction?: Direction;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ALTPISearch)
+  @Field(() => ALTPISearch)
+  search: ALTPISearch;
+}
