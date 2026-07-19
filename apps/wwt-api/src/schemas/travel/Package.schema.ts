@@ -7,7 +7,7 @@ import {
   TransportType,
 } from '../../libs/enums/package.enum';
 
-const PackageSchema = new Schema(
+const TravelPackageSchema = new Schema(
   {
     agentId: {
       type: Schema.Types.ObjectId,
@@ -166,15 +166,15 @@ const PackageSchema = new Schema(
       type: Date,
     },
   },
-  { timestamps: true, collection: 'packages' },
+  { timestamps: true, collection: 'travelPackages' },
 );
 
-PackageSchema.index({ agentId: 1 });
-PackageSchema.index({ packageSlug: 1 });
-PackageSchema.index({ packageStatus: 1 });
-PackageSchema.index({ packageCategory: 1 });
-PackageSchema.index({ destinationCountry: 1, destinationCity: 1 });
-PackageSchema.index({ packagePrice: 1 });
-PackageSchema.index({ packageRating: -1 });
+TravelPackageSchema.index({ agentId: 1 });
+TravelPackageSchema.index({ packageSlug: 1 });
+TravelPackageSchema.index({ packageStatus: 1 });
+TravelPackageSchema.index({ packageCategory: 1 });
+TravelPackageSchema.index({ destinationCountry: 1, destinationCity: 1 });
+TravelPackageSchema.index({ packagePrice: 1 });
+TravelPackageSchema.index({ packageRating: -1 });
 
-export default PackageSchema;
+export default TravelPackageSchema;
