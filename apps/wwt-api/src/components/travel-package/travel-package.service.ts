@@ -8,11 +8,15 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import moment from 'moment';
 import { FilterQuery, Model, ObjectId } from 'mongoose';
+import { lookupAgent, unwindAgent } from '../../libs/config';
 import { ViewInput } from '../../libs/dto/community/view.input';
-import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
-import { TravelPackageInput } from '../../libs/dto/travel-package/travel-package.input';
+import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
+import {
+  TravelPackageInput,
+  TravelPackagesInquiry,
+} from '../../libs/dto/travel-package/travel-package.input';
 import { TravelPackageUpdate } from '../../libs/dto/travel-package/travel-package.update';
-import { Message } from '../../libs/enums/common.enum';
+import { Direction, Message } from '../../libs/enums/common.enum';
 import { ViewTargetType } from '../../libs/enums/community.enum';
 import { PackageStatus } from '../../libs/enums/package.enum';
 import { StatisticModifier } from '../../libs/types/common';
@@ -148,8 +152,105 @@ export class TravelPackageService {
     return targetPackage;
   }
 
-  public async getTravelPackages(): Promise<string> {
-    return 'getTravelPackages executed!';
+  public async getTravelPackages(
+    memberId: ObjectId | null,
+    input: TravelPackagesInquiry,
+  ): Promise<TravelPackages> {
+    const match: FilterQuery<TravelPackage> = {
+      packageStatus: PackageStatus.ACTIVE,
+    };
+
+    const sort: Record<string, 1 | -1> = {
+      [input.sort ?? 'createdAt']: input.direction === Direction.ASC ? 1 : -1,
+    };
+
+    this.shapeMatchQuery(match, input);
+
+    console.log('match:', match);
+
+    const result = await this.packageModel
+      .aggregate([
+        { $match: match },
+        { $sort: sort },
+        {
+          $facet: {
+            list: [
+              { $skip: (input.page - 1) * input.limit },
+              { $limit: input.limit },
+
+              // TODO: meLiked
+              lookupAgent,
+              unwindAgent,
+            ],
+            metaCounter: [{ $count: 'total' }],
+          },
+        },
+      ])
+      .exec();
+
+    return (
+      result[0] ?? {
+        list: [],
+        metaCounter: [],
+      }
+    );
+  }
+
+  private shapeMatchQuery(match: FilterQuery<TravelPackage>, input: TravelPackagesInquiry): void {
+    const search = input.search;
+
+    if (!search) return;
+
+    const {
+      packageCategory,
+      destinationCountry,
+      destinationCity,
+      pricesRange,
+      periodsRange,
+      text,
+    } = search;
+
+    if (packageCategory) {
+      match.packageCategory = packageCategory;
+    }
+
+    if (destinationCountry?.trim()) {
+      match.destinationCountry = {
+        $regex: new RegExp(`^${destinationCountry.trim()}$`, 'i'),
+      };
+    }
+
+    if (destinationCity?.trim()) {
+      match.destinationCity = {
+        $regex: new RegExp(`^${destinationCity.trim()}$`, 'i'),
+      };
+    }
+
+    if (pricesRange) {
+      match.packagePrice = {
+        $gte: pricesRange.start,
+        $lte: pricesRange.end,
+      };
+    }
+
+    if (periodsRange) {
+      match.createdAt = {
+        $gte: periodsRange.start,
+        $lte: periodsRange.end,
+      };
+    }
+
+    if (text?.trim()) {
+      const regex = new RegExp(text.trim(), 'i');
+
+      match.$or = [
+        { packageTitle: regex },
+        { packageShortDesc: regex },
+        { packageDesc: regex },
+        { destinationCountry: regex },
+        { destinationCity: regex },
+      ];
+    }
   }
 
   public async getAllTravelPackagesByAdmin(): Promise<string> {

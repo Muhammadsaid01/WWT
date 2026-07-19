@@ -3,8 +3,11 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
-import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
-import { TravelPackageInput } from '../../libs/dto/travel-package/travel-package.input';
+import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
+import {
+  TravelPackageInput,
+  TravelPackagesInquiry,
+} from '../../libs/dto/travel-package/travel-package.input';
 import { TravelPackageUpdate } from '../../libs/dto/travel-package/travel-package.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -68,10 +71,14 @@ export class TravelPackageResolver {
     const packageId = shapeIntoMongoObjectId(input);
     return this.travelService.getTravelPackage(memberId, packageId);
   }
-
-  @Query(() => String)
-  public async getTravelPackages(): Promise<string> {
-    return this.travelService.getTravelPackages();
+  @UseGuards(WithoutGuard)
+  @Query(() => TravelPackages)
+  public async getTravelPackages(
+    @Args('input') input: TravelPackagesInquiry,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackages> {
+    console.log('Mutation: getTravelPackages!');
+    return this.travelService.getTravelPackages(memberId, input);
   }
 
   /** ADMIN  **/

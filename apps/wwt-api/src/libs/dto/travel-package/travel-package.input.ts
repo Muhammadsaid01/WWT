@@ -1,5 +1,18 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsDate,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { availablePackageSorts } from '../../config';
 import { Direction } from '../../enums/common.enum';
 import {
   PackageCategory,
@@ -106,6 +119,29 @@ export class TravelPackageInput {
 }
 
 @InputType()
+export class PeriodsRange {
+  @IsDate()
+  @Field(() => Date)
+  start: Date;
+
+  @IsDate()
+  @Field(() => Date)
+  end: Date;
+}
+
+@InputType()
+export class PricesRange {
+  @IsInt()
+  @Min(0)
+  @Field(() => Int)
+  start: number;
+
+  @IsInt()
+  @Min(0)
+  @Field(() => Int)
+  end: number;
+}
+@InputType()
 class TPISearch {
   @IsOptional()
   @IsEnum(PackageStatus)
@@ -126,6 +162,18 @@ class TPISearch {
   destinationCity?: string;
 
   @IsOptional()
+  @ValidateNested()
+  @Type(() => PricesRange)
+  @Field(() => PricesRange, { nullable: true })
+  pricesRange?: PricesRange;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PeriodsRange)
+  @Field(() => PeriodsRange, { nullable: true })
+  periodsRange?: PeriodsRange;
+
+  @IsOptional()
   @Field(() => String, { nullable: true })
   text?: string;
 }
@@ -143,6 +191,7 @@ export class TravelPackagesInquiry {
   limit: number;
 
   @IsOptional()
+  @IsIn(availablePackageSorts)
   @Field(() => String, { nullable: true })
   sort?: string;
 
@@ -151,6 +200,8 @@ export class TravelPackagesInquiry {
   direction?: Direction;
 
   @IsOptional()
+  @ValidateNested()
+  @Type(() => TPISearch)
   @Field(() => TPISearch, { nullable: true })
   search?: TPISearch;
 }
