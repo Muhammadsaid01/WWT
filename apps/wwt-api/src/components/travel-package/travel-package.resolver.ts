@@ -71,6 +71,7 @@ export class TravelPackageResolver {
     const packageId = shapeIntoMongoObjectId(input);
     return this.travelService.getTravelPackage(memberId, packageId);
   }
+
   @UseGuards(WithoutGuard)
   @Query(() => TravelPackages)
   public async getTravelPackages(
