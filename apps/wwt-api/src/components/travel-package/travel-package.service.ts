@@ -6,10 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import moment from 'moment';
 import { FilterQuery, Model, ObjectId } from 'mongoose';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { TravelPackageInput } from '../../libs/dto/travel-package/travel-package.input';
+import { TravelPackageUpdate } from '../../libs/dto/travel-package/travel-package.update';
 import { Message } from '../../libs/enums/common.enum';
 import { ViewTargetType } from '../../libs/enums/community.enum';
 import { PackageStatus } from '../../libs/enums/package.enum';
@@ -51,8 +53,45 @@ export class TravelPackageService {
     }
   }
 
-  public async updateTravelPackage(): Promise<string> {
-    return 'updateTravelPackage executed!';
+  public async updateTravelPackage(
+    memberId: ObjectId,
+    input: TravelPackageUpdate,
+  ): Promise<TravelPackage> {
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    let { soldAt, deletedAt } = input;
+    const { packageStatus } = input;
+
+    const search: FilterQuery<TravelPackage> = {
+      _id: input._id,
+      agentId: agent._id,
+      packageStatus: PackageStatus.ACTIVE,
+    };
+
+    if (packageStatus === PackageStatus.SOLD) soldAt = moment().toDate();
+    else if (packageStatus === PackageStatus.DELETED) deletedAt = moment().toDate();
+    const result = await this.packageModel
+      .findOneAndUpdate(search, input, {
+        new: true,
+      })
+      .exec();
+
+    if (!result) {
+      throw new NotFoundException(Message.UPDATE_FAILED);
+    }
+
+    // Agar status o'zgarsa, shu yerda statistikalarni yangilashing mumkin.
+    // Masalan:
+
+    if (soldAt || deletedAt) {
+      await this.agentService.agentStatsEditor({
+        _id: agent._id,
+        targetKey: 'agentPackageCount',
+        modifier: -1,
+      });
+    }
+
+    return result;
   }
 
   public async deleteTravelPackage(): Promise<string> {

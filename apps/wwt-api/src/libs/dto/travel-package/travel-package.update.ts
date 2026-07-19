@@ -1,14 +1,20 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsOptional, IsString, Length, Min } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
+import { ObjectId } from 'mongoose';
 import {
   PackageCategory,
   PackageLevel,
+  PackageStatus,
   PackageType,
   TransportType,
 } from '../../enums/package.enum';
 
 @InputType()
 export class TravelPackageUpdate {
+  @IsNotEmpty()
+  @Field(() => String)
+  _id: ObjectId;
+
   @IsOptional()
   @IsString()
   @Length(3, 100)
@@ -35,6 +41,11 @@ export class TravelPackageUpdate {
   @IsEnum(PackageCategory)
   @Field(() => PackageCategory, { nullable: true })
   packageCategory?: PackageCategory;
+
+  @IsOptional()
+  @IsEnum(PackageStatus)
+  @Field(() => PackageStatus, { nullable: true })
+  packageStatus?: PackageStatus;
 
   @IsOptional()
   @IsEnum(PackageLevel)
@@ -102,4 +113,8 @@ export class TravelPackageUpdate {
   @IsOptional()
   @Field(() => [String], { nullable: true })
   packageImages?: string[];
+
+  soldAt?: Date;
+
+  deletedAt?: Date;
 }

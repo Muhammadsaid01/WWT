@@ -162,7 +162,11 @@ const TravelPackageSchema = new Schema(
       default: 0,
     },
 
-    packageDeletedAt: {
+    soldAt: {
+      type: Date,
+    },
+
+    deletedAt: {
       type: Date,
     },
   },

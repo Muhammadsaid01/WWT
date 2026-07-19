@@ -5,6 +5,7 @@ import { ObjectId } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { TravelPackageInput } from '../../libs/dto/travel-package/travel-package.input';
+import { TravelPackageUpdate } from '../../libs/dto/travel-package/travel-package.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -32,9 +33,14 @@ export class TravelPackageResolver {
 
   @Roles(MemberType.AGENT)
   @UseGuards(RolesGuard)
-  @Mutation(() => String)
-  public async updateTravelPackage(): Promise<string> {
-    return this.travelService.updateTravelPackage();
+  @Mutation(() => TravelPackage)
+  public async updateTravelPackage(
+    @Args('input') input: TravelPackageUpdate,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackage> {
+    console.log('Mutation: updateTravelPackage!');
+    input._id = shapeIntoMongoObjectId(input._id);
+    return this.travelService.updateTravelPackage(memberId, input);
   }
 
   @Roles(MemberType.AGENT)

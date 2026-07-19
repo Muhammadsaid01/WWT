@@ -50,7 +50,7 @@ registerEnumType(TransportType, {
 
 export enum PackageStatus {
   ACTIVE = 'ACTIVE',
-  SOLD_OUT = 'SOLD_OUT',
+  SOLD = 'SOLD',
   HIDDEN = 'HIDDEN',
   EXPIRED = 'EXPIRED',
   DELETED = 'DELETED',

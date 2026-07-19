@@ -97,7 +97,10 @@ export class TravelPackage {
   packageReviewCount: number;
 
   @Field(() => Date, { nullable: true })
-  packageDeletedAt?: Date;
+  soldAt?: Date;
+
+  @Field(() => Date, { nullable: true })
+  deletedAt?: Date;
 
   @Field(() => Date)
   createdAt: Date;
