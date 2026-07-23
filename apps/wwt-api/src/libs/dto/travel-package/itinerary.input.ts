@@ -1,11 +1,12 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsNotEmpty, IsString, Length, Min } from 'class-validator';
+import { IsMongoId, IsNotEmpty, IsString, Length, Min } from 'class-validator';
+import { ObjectId } from 'mongoose';
 
 @InputType()
 export class ItineraryInput {
   @IsNotEmpty()
   @Field(() => String)
-  packageId: string;
+  packageId: ObjectId;
 
   @IsNotEmpty()
   @Min(1)
@@ -23,4 +24,11 @@ export class ItineraryInput {
   @Length(5, 2000)
   @Field(() => String)
   description: string;
+}
+
+@InputType()
+export class DeleteItineraryInput {
+  @IsMongoId()
+  @Field(() => String)
+  _id: ObjectId;
 }

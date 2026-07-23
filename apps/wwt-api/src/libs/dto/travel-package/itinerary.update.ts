@@ -1,8 +1,17 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsOptional, IsString, Length, Min } from 'class-validator';
+import { IsMongoId, IsOptional, IsString, Length, Min } from 'class-validator';
+import { ObjectId } from 'mongoose';
 
 @InputType()
 export class ItineraryUpdate {
+  @IsMongoId()
+  @Field(() => String)
+  _id: ObjectId;
+
+  @IsMongoId()
+  @Field(() => String)
+  packageId: ObjectId;
+
   @IsOptional()
   @Min(1)
   @Field(() => Int, { nullable: true })

@@ -3,8 +3,36 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
+import { Itinerary } from '../../libs/dto/travel-package/itinerary';
+import {
+  DeleteItineraryInput,
+  ItineraryInput,
+} from '../../libs/dto/travel-package/itinerary.input';
+import { ItineraryUpdate } from '../../libs/dto/travel-package/itinerary.update';
+import { PackageExclude } from '../../libs/dto/travel-package/package-exclude';
+import {
+  DeletePackageExcludeInput,
+  PackageExcludeInput,
+} from '../../libs/dto/travel-package/package-exclude.input';
+import { PackageInclude } from '../../libs/dto/travel-package/package-include';
+import {
+  DeletePackageIncludeInput,
+  PackageIncludeInput,
+} from '../../libs/dto/travel-package/package-include.input';
 import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
-import { PackageScheduleInput } from '../../libs/dto/travel-package/package-schedule.input';
+import {
+  DeletePackageScheduleInput,
+  PackageScheduleInput,
+} from '../../libs/dto/travel-package/package-schedule.input';
+import {
+  PackageScheduleUpdate,
+  PackageScheduleUpdateByAdmin,
+} from '../../libs/dto/travel-package/package-schedule.update';
+import { PackageTag } from '../../libs/dto/travel-package/package-tag';
+import {
+  DeletePackageTagInput,
+  PackageTagInput,
+} from '../../libs/dto/travel-package/package-tag.input';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
   AgentTravelPackagesInquiry,
@@ -143,6 +171,7 @@ export class TravelPackageResolver {
     @Args('input') input: PackageScheduleInput,
     @AuthMember('_id') memberId: ObjectId,
   ): Promise<PackageSchedule> {
+    console.log('memberId:', memberId);
     console.log('Mutation: createPackageSchedule');
 
     input.packageId = shapeIntoMongoObjectId(input.packageId);
@@ -150,129 +179,347 @@ export class TravelPackageResolver {
     return await this.travelService.createPackageSchedule(memberId, input);
   }
 
-  @Mutation(() => String)
-  public async updatePackageSchedule(): Promise<string> {
-    return this.travelService.updatePackageSchedule();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageSchedule)
+  public async updatePackageSchedule(
+    @Args('input') input: PackageScheduleUpdate,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageSchedule> {
+    console.log('Mutation: updatePackageSchedule');
+    input._id = shapeIntoMongoObjectId(input._id);
+    input.packageId = shapeIntoMongoObjectId(input.packageId);
+    return this.travelService.updatePackageSchedule(memberId, input);
   }
 
-  @Mutation(() => String)
-  public async deletePackageSchedule(): Promise<string> {
-    return this.travelService.deletePackageSchedule();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageSchedule)
+  public async deletePackageSchedule(
+    @Args('input') input: DeletePackageScheduleInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageSchedule> {
+    console.log('Mutation: deletePackageSchedule');
+    console.log('memberId:', memberId);
+
+    input._id = shapeIntoMongoObjectId(input._id);
+
+    return this.travelService.deletePackageSchedule(memberId, input);
   }
 
-  @Query(() => String)
-  public async getPackageSchedules(): Promise<string> {
-    return this.travelService.getPackageSchedules();
+  @UseGuards(WithoutGuard)
+  @Query(() => [PackageSchedule])
+  public async getPackageSchedules(
+    @Args('packageId', { type: () => String })
+    packageId: string,
+  ): Promise<PackageSchedule[]> {
+    console.log('Query: getPackageSchedules');
+
+    const targetPackageId = shapeIntoMongoObjectId(packageId);
+
+    return this.travelService.getPackageSchedules(targetPackageId);
   }
 
-  @Query(() => String)
-  public async getAllPackageSchedulesByAdmin(): Promise<string> {
-    return this.travelService.getAllPackageSchedulesByAdmin();
+  @UseGuards(WithoutGuard)
+  @Query(() => PackageSchedule)
+  public async getPackageSchedule(
+    @Args('scheduleId') scheduleId: string,
+  ): Promise<PackageSchedule> {
+    return this.travelService.getPackageSchedule(shapeIntoMongoObjectId(scheduleId));
   }
 
-  @Mutation(() => String)
-  public async updatePackageScheduleByAdmin(): Promise<string> {
-    return this.travelService.updatePackageScheduleByAdmin();
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => [PackageSchedule])
+  public async getPackageSchedulesByAdmin(
+    @Args('packageId', { type: () => String })
+    packageId: string,
+  ): Promise<PackageSchedule[]> {
+    return this.travelService.getPackageSchedulesByAdmin(shapeIntoMongoObjectId(packageId));
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(MemberType.ADMIN)
+  @Mutation(() => PackageSchedule)
+  public async updatePackageScheduleByAdmin(
+    @Args('scheduleId', { type: () => String })
+    scheduleId: string,
+    @Args('input')
+    input: PackageScheduleUpdateByAdmin,
+  ): Promise<PackageSchedule> {
+    return this.travelService.updatePackageScheduleByAdmin(
+      shapeIntoMongoObjectId(scheduleId),
+      input,
+    );
+  }
+
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageSchedule)
+  public async deletePackageScheduleByAdmin(
+    @Args('scheduleId', { type: () => String })
+    scheduleId: string,
+  ): Promise<PackageSchedule> {
+    console.log('Mutation: deletePackageScheduleByAdmin');
+
+    return this.travelService.deletePackageScheduleByAdmin(shapeIntoMongoObjectId(scheduleId));
   }
 
   // ================================
   // Itinerary
   // ================================
 
-  @Mutation(() => String)
-  public async createItinerary(): Promise<string> {
-    return this.travelService.createItinerary();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => Itinerary)
+  public async createItinerary(
+    @Args('input') input: ItineraryInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<Itinerary> {
+    console.log('memberId:', memberId);
+    console.log('Mutation: createItinerary');
+
+    input.packageId = shapeIntoMongoObjectId(input.packageId);
+
+    return await this.travelService.createItinerary(memberId, input);
+  }
+  @UseGuards(WithoutGuard)
+  @Query(() => [Itinerary])
+  public async getItineraries(
+    @Args('packageId', { type: () => String })
+    packageId: string,
+  ): Promise<Itinerary[]> {
+    console.log('Query: getItineraries');
+
+    const targetId = shapeIntoMongoObjectId(packageId);
+
+    return this.travelService.getItineraries(targetId);
+  }
+  @UseGuards(WithoutGuard)
+  @Query(() => Itinerary)
+  public async getItinerary(@Args('itineraryId') itineraryId: string): Promise<Itinerary> {
+    console.log('Query: getItinerary');
+    const targetId = shapeIntoMongoObjectId(itineraryId);
+    return this.travelService.getItinerary(targetId);
+  }
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => Itinerary)
+  public async updateItinerary(
+    @Args('input') input: ItineraryUpdate,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<Itinerary> {
+    console.log('Mutation: updateItinerary');
+    console.log('memberId:', memberId);
+
+    input._id = shapeIntoMongoObjectId(input._id);
+
+    return this.travelService.updateItinerary(memberId, input);
   }
 
-  @Mutation(() => String)
-  public async updateItinerary(): Promise<string> {
-    return this.travelService.updateItinerary();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => Itinerary)
+  public async deleteItinerary(
+    @Args('input') input: DeleteItineraryInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<Itinerary> {
+    console.log('Mutation: deleteItinerary');
+    console.log('memberId:', memberId);
+
+    input._id = shapeIntoMongoObjectId(input._id);
+
+    return this.travelService.deleteItinerary(memberId, input);
   }
 
-  @Mutation(() => String)
-  public async deleteItinerary(): Promise<string> {
-    return this.travelService.deleteItinerary();
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => [Itinerary])
+  public async getItinerariesByAdmin(@Args('packageId') packageId: string): Promise<Itinerary[]> {
+    console.log('Query: getItinerariesByAdmin');
+
+    const targetId = shapeIntoMongoObjectId(packageId);
+
+    return this.travelService.getItinerariesByAdmin(targetId);
   }
 
-  @Query(() => String)
-  public async getItineraries(): Promise<string> {
-    return this.travelService.getItineraries();
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Mutation(() => Itinerary)
+  public async updateItineraryByAdmin(@Args('input') input: ItineraryUpdate): Promise<Itinerary> {
+    console.log('Mutation: updateItineraryByAdmin');
+
+    input._id = shapeIntoMongoObjectId(input._id);
+
+    return this.travelService.updateItineraryByAdmin(input);
   }
 
-  @Query(() => String)
-  public async getAllItinerariesByAdmin(): Promise<string> {
-    return this.travelService.getAllItinerariesByAdmin();
-  }
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Mutation(() => Itinerary)
+  public async deleteItineraryByAdmin(
+    @Args('input') input: DeleteItineraryInput,
+  ): Promise<Itinerary> {
+    console.log('Mutation: deletePackageScheduleByAdmin');
 
-  @Mutation(() => String)
-  public async updateItineraryByAdmin(): Promise<string> {
-    return this.travelService.updateItineraryByAdmin();
+    input._id = shapeIntoMongoObjectId(input._id);
+
+    return this.travelService.deleteItineraryByAdmin(input);
   }
 
   //PackageInclude
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageInclude)
+  public async createPackageInclude(
+    @Args('input') input: PackageIncludeInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageInclude> {
+    console.log('Mutation: createPackageInclude');
+    console.log('memberId:', memberId);
 
-  @Mutation(() => String)
-  public async createPackageInclude(): Promise<string> {
-    return this.travelService.createPackageInclude();
+    input.packageId = shapeIntoMongoObjectId(input.packageId);
+
+    return this.travelService.createPackageInclude(memberId, input);
   }
 
-  @Mutation(() => String)
-  public async deletePackageInclude(): Promise<string> {
-    return this.travelService.deletePackageInclude();
+  @UseGuards(WithoutGuard)
+  @Query(() => [PackageInclude])
+  public async getPackageIncludes(
+    @Args('packageId', { type: () => String })
+    packageId: string,
+  ): Promise<PackageInclude[]> {
+    console.log('Query: getPackageIncludes');
+
+    const targetId = shapeIntoMongoObjectId(packageId);
+
+    return this.travelService.getPackageIncludes(targetId);
   }
 
-  @Query(() => String)
-  public async getPackageIncludes(): Promise<string> {
-    return this.travelService.getPackageIncludes();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageInclude)
+  public async deletePackageInclude(
+    @Args('input') input: DeletePackageIncludeInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageInclude> {
+    console.log('Mutation: deletePackageInclude');
+    console.log('memberId:', memberId);
+    input._id = shapeIntoMongoObjectId(input._id);
+    return this.travelService.deletePackageInclude(memberId, input);
   }
 
-  @Query(() => String)
-  public async getAllPackageIncludesByAdmin(): Promise<string> {
-    return this.travelService.getAllPackageIncludesByAdmin();
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => [PackageInclude])
+  public async getAllPackageIncludesByAdmin(
+    @Args('packageId') packageId: string,
+  ): Promise<PackageInclude[]> {
+    console.log('Query: getAllPackageIncludesByAdmin');
+
+    const targetId = shapeIntoMongoObjectId(packageId);
+
+    return this.travelService.getAllPackageIncludesByAdmin(targetId);
   }
 
   //PackageExclude
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageExclude)
+  public async createPackageExclude(
+    @Args('input') input: PackageExcludeInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageExclude> {
+    console.log('Mutation: createPackageExclude');
+    console.log('memberId:', memberId);
 
-  @Mutation(() => String)
-  public async createPackageExclude(): Promise<string> {
-    return this.travelService.createPackageExclude();
+    input.packageId = shapeIntoMongoObjectId(input.packageId);
+    return this.travelService.createPackageExclude(memberId, input);
+  }
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => [PackageExclude])
+  public async getAllPackageExcludesByAdmin(
+    @Args('packageId') packageId: string,
+  ): Promise<PackageExclude[]> {
+    console.log('Query: getAllPackageExcludesByAdmin');
+
+    const targetId = shapeIntoMongoObjectId(packageId);
+    return this.travelService.getAllPackageExcludesByAdmin(targetId);
   }
 
-  @Query(() => String)
-  public async getAllPackageExcludesByAdmin(): Promise<string> {
-    return this.travelService.getAllPackageExcludesByAdmin();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageExclude)
+  public async deletePackageExclude(
+    @Args('input') input: DeletePackageExcludeInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageExclude> {
+    console.log('Mutation: deletePackageInclude');
+    input._id = shapeIntoMongoObjectId(input._id);
+    return this.travelService.deletePackageExclude(memberId, input);
   }
 
-  @Mutation(() => String)
-  public async deletePackageExclude(): Promise<string> {
-    return this.travelService.deletePackageExclude();
-  }
+  @UseGuards(WithoutGuard)
+  @Query(() => [PackageExclude])
+  public async getPackageExcludes(
+    @Args('packageId', { type: () => String })
+    packageId: string,
+  ): Promise<PackageExclude[]> {
+    console.log('Query: getPackageExcludes');
 
-  @Query(() => String)
-  public async getPackageExcludes(): Promise<string> {
-    return this.travelService.getPackageExcludes();
+    const targetId = shapeIntoMongoObjectId(packageId);
+
+    return this.travelService.getPackageExcludes(targetId);
   }
 
   //PackageTag
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageTag)
+  public async createPackageTag(
+    @Args('input') input: PackageTagInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageTag> {
+    console.log('Mutation: createPackageTag');
+    console.log('memberId:', memberId);
 
-  @Mutation(() => String)
-  public async createPackageTag(): Promise<string> {
-    return this.travelService.createPackageTag();
+    input.packageId = shapeIntoMongoObjectId(input.packageId);
+    return this.travelService.createPackageTag(memberId, input);
   }
 
-  @Query(() => String)
-  public async getAllPackageTagsByAdmin(): Promise<string> {
-    return this.travelService.getAllPackageTagsByAdmin();
+  @UseGuards(WithoutGuard)
+  @Query(() => [PackageTag])
+  public async getPackageTags(
+    @Args('packageId', { type: () => String })
+    packageId: string,
+  ): Promise<PackageTag[]> {
+    console.log('Query: getPackageTags');
+
+    const targetId = shapeIntoMongoObjectId(packageId);
+    return this.travelService.getPackageTags(targetId);
   }
 
-  @Mutation(() => String)
-  public async deletePackageTag(): Promise<string> {
-    return this.travelService.deletePackageTag();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackageTag)
+  public async deletePackageTag(
+    @Args('input') input: DeletePackageTagInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackageTag> {
+    console.log('Mutation: deletePackageTag');
+    input._id = shapeIntoMongoObjectId(input._id);
+    return this.travelService.deletePackageTag(memberId, input);
   }
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  public async getAllPackageTagsByAdmin(
+    @Args('packageId') packageId: string,
+  ): Promise<PackageTag[]> {
+    console.log('Query: getAllPackageTagsByAdmin');
 
-  @Query(() => String)
-  public async getPackageTags(): Promise<string> {
-    return this.travelService.getPackageTags();
+    const targetId = shapeIntoMongoObjectId(packageId);
+    return this.travelService.getAllPackageTagsByAdmin(targetId);
   }
 
   //PackagePolicy

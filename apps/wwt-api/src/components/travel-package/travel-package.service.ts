@@ -12,12 +12,36 @@ import { FilterQuery, Model, ObjectId } from 'mongoose';
 import { lookupAgent, unwindAgent } from '../../libs/config';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Itinerary } from '../../libs/dto/travel-package/itinerary';
+import {
+  DeleteItineraryInput,
+  ItineraryInput,
+} from '../../libs/dto/travel-package/itinerary.input';
+import { ItineraryUpdate } from '../../libs/dto/travel-package/itinerary.update';
 import { PackageExclude } from '../../libs/dto/travel-package/package-exclude';
+import {
+  DeletePackageExcludeInput,
+  PackageExcludeInput,
+} from '../../libs/dto/travel-package/package-exclude.input';
 import { PackageInclude } from '../../libs/dto/travel-package/package-include';
+import {
+  DeletePackageIncludeInput,
+  PackageIncludeInput,
+} from '../../libs/dto/travel-package/package-include.input';
 import { PackagePolicy } from '../../libs/dto/travel-package/package-policy';
 import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
-import { PackageScheduleInput } from '../../libs/dto/travel-package/package-schedule.input';
+import {
+  DeletePackageScheduleInput,
+  PackageScheduleInput,
+} from '../../libs/dto/travel-package/package-schedule.input';
+import {
+  PackageScheduleUpdate,
+  PackageScheduleUpdateByAdmin,
+} from '../../libs/dto/travel-package/package-schedule.update';
 import { PackageTag } from '../../libs/dto/travel-package/package-tag';
+import {
+  DeletePackageTagInput,
+  PackageTagInput,
+} from '../../libs/dto/travel-package/package-tag.input';
 import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import {
   AgentTravelPackagesInquiry,
@@ -31,7 +55,7 @@ import {
 } from '../../libs/dto/travel-package/travel-package.update';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { ViewTargetType } from '../../libs/enums/community.enum';
-import { PackageStatus } from '../../libs/enums/package.enum';
+import { PackageStatus, ScheduleStatus } from '../../libs/enums/package.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { AgentService } from '../agent/agent.service';
 import { MemberService } from '../member/member.service';
@@ -493,102 +517,624 @@ export class TravelPackageService {
     return result;
   }
 
-  public async updatePackageSchedule(): Promise<string> {
-    return 'updatePackageSchedule executed!';
-  }
-  public async getPackageSchedules(): Promise<string> {
-    return 'getPackageSchedules executed!';
-  }
-  public async deletePackageSchedule(): Promise<string> {
-    return 'deletePackageSchedule executed!';
+  public async getPackageSchedules(packageId: ObjectId): Promise<PackageSchedule[]> {
+    const result = await this.packageScheduleModel
+      .find({
+        packageId,
+        scheduleStatus: ScheduleStatus.OPEN,
+      })
+      .sort({ startDate: 1 })
+      .lean();
+
+    return result;
   }
 
-  public async getAllPackageSchedulesByAdmin(): Promise<string> {
-    return 'getAllPackageSchedulesByAdmin executed!';
+  public async getPackageSchedule(scheduleId: ObjectId): Promise<PackageSchedule> {
+    const result = await this.packageScheduleModel.findById(scheduleId);
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return result;
   }
 
-  public async updatePackageScheduleByAdmin(): Promise<string> {
-    return 'updatePackageScheduleByAdmin executed!';
+  public async updatePackageSchedule(
+    memberId: ObjectId,
+    input: PackageScheduleUpdate,
+  ): Promise<PackageSchedule> {
+    const targetSchedule = await this.packageScheduleModel.findById(input._id);
+
+    if (!targetSchedule) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const targetPackage = await this.packageModel.findById(targetSchedule.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    if (String(targetPackage.agentId) !== String(agent._id)) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    const startDate = input.startDate ? new Date(input.startDate) : targetSchedule.startDate;
+
+    const endDate = input.endDate ? new Date(input.endDate) : targetSchedule.endDate;
+
+    if (startDate >= endDate) {
+      throw new BadRequestException('Start date must be earlier than end date.');
+    }
+
+    const result = await this.packageScheduleModel.findByIdAndUpdate(
+      input._id,
+      {
+        $set: {
+          ...input,
+          startDate,
+          endDate,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    return result;
   }
 
-  //Itinerary
+  public async deletePackageSchedule(
+    memberId: ObjectId,
+    input: DeletePackageScheduleInput,
+  ): Promise<PackageSchedule> {
+    const { _id } = input;
+    const agent = await this.agentService.findAgentByMemberId(memberId);
 
-  public async createItinerary(): Promise<string> {
-    return 'createItinerary executed!';
+    const targetSchedule = await this.packageScheduleModel.findById(_id);
+
+    if (!targetSchedule) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const targetPackage = await this.packageModel.findById(targetSchedule.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    const deletedSchedule = await this.packageScheduleModel.findByIdAndDelete(_id);
+
+    if (!deletedSchedule) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return deletedSchedule;
   }
 
-  public async updateItinerary(): Promise<string> {
-    return 'updateItinerary executed!';
+  public async getPackageSchedulesByAdmin(packageId: ObjectId): Promise<PackageSchedule[]> {
+    const targetPackage = await this.packageModel.findById(packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return this.packageScheduleModel
+      .find({
+        packageId,
+      })
+      .sort({
+        startDate: 1,
+      })
+      .exec();
   }
 
-  public async deleteItinerary(): Promise<string> {
-    return 'deletePackageSchedule executed!';
+  public async updatePackageScheduleByAdmin(
+    scheduleId: ObjectId,
+    input: PackageScheduleUpdateByAdmin,
+  ): Promise<PackageSchedule> {
+    const updatedSchedule = await this.packageScheduleModel.findByIdAndUpdate(scheduleId, input, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!updatedSchedule) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return updatedSchedule;
   }
 
-  public async getItineraries(): Promise<string> {
-    return 'getItineraries executed!';
+  public async deletePackageScheduleByAdmin(scheduleId: ObjectId): Promise<PackageSchedule> {
+    const deletedSchedule = await this.packageScheduleModel.findByIdAndDelete(scheduleId);
+
+    if (!deletedSchedule) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return deletedSchedule;
   }
 
-  public async getAllItinerariesByAdmin(): Promise<string> {
-    return 'updatePackageScheduleByAdmin executed!';
+  // ================================
+  // Itinerary
+  // ================================
+
+  public async createItinerary(memberId: ObjectId, input: ItineraryInput): Promise<Itinerary> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(input.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package shu agentniki ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    const existingItinerary = await this.itineraryModel.findOne({
+      packageId: input.packageId,
+      dayNumber: input.dayNumber,
+    });
+
+    if (existingItinerary) {
+      throw new BadRequestException('Day number already exists.');
+    }
+
+    // 4. Itinerary yaratamiz
+    const result = await this.itineraryModel.create(input);
+
+    return result;
   }
 
-  public async updateItineraryByAdmin(): Promise<string> {
-    return 'getPackageSchedules executed!';
+  public async getItineraries(packageId: ObjectId): Promise<Itinerary[]> {
+    const targetPackage = await this.packageModel.findOne({
+      _id: packageId,
+      packageStatus: PackageStatus.ACTIVE,
+    });
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const result = this.itineraryModel
+      .find({
+        packageId,
+      })
+      .sort({
+        dayNumber: 1,
+      })
+      .exec();
+    return result;
   }
 
+  public async getItinerary(targetId: ObjectId): Promise<Itinerary> {
+    const result = await this.itineraryModel.findById(targetId);
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return result;
+  }
+
+  public async updateItinerary(memberId: ObjectId, input: ItineraryUpdate): Promise<Itinerary> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Itinerary mavjudligini tekshiramiz
+    const targetItinerary = await this.itineraryModel.findById(input._id);
+
+    if (!targetItinerary) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+    // 3. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(targetItinerary.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+    // 4. Agent egasi ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    const result = await this.itineraryModel.findByIdAndUpdate(input._id, input, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return result;
+  }
+
+  public async deleteItinerary(
+    memberId: ObjectId,
+    input: DeleteItineraryInput,
+  ): Promise<Itinerary> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Itinerary mavjudligini tekshiramiz
+    const targetItinerary = await this.itineraryModel.findById(input._id);
+
+    if (!targetItinerary) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(targetItinerary.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 4. Agent egasi ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 5. O'chiramiz
+    const result = await this.itineraryModel.findByIdAndDelete(input._id);
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return result;
+  }
+
+  public async getItinerariesByAdmin(packageId: ObjectId): Promise<Itinerary[]> {
+    const targetPackage = await this.packageModel.findById(packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return await this.itineraryModel
+      .find({
+        packageId,
+      })
+      .sort({
+        dayNumber: 1,
+      });
+  }
+
+  public async updateItineraryByAdmin(input: ItineraryUpdate): Promise<Itinerary> {
+    const updatedItinerary = await this.itineraryModel.findByIdAndUpdate(input._id, input, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!updatedItinerary) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return updatedItinerary;
+  }
+
+  public async deleteItineraryByAdmin(input: DeleteItineraryInput): Promise<Itinerary> {
+    const deletedItinerary = await this.itineraryModel.findByIdAndDelete(input._id);
+
+    if (!deletedItinerary) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return deletedItinerary;
+  }
   //PackageInclude
 
-  public async getPackageIncludes(): Promise<string> {
-    return 'getPackageIncludes executed!';
+  public async createPackageInclude(
+    memberId: ObjectId,
+    input: PackageIncludeInput,
+  ): Promise<PackageInclude> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(input.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package shu agentniki ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 4. PackageInclude yaratamiz
+    const result = await this.packageIncludeModel.create(input);
+
+    return result;
   }
 
-  public async createPackageInclude(): Promise<string> {
-    return 'createPackageInclude executed!';
+  public async getPackageIncludes(packageId: ObjectId): Promise<PackageInclude[]> {
+    const targetPackage = await this.packageModel.findOne({
+      _id: packageId,
+      packageStatus: PackageStatus.ACTIVE,
+    });
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const result = await this.packageIncludeModel
+      .find({
+        packageId,
+      })
+      .sort({
+        createdAt: 1,
+      })
+      .exec();
+
+    return result;
+  }
+  public async deletePackageInclude(
+    memberId: ObjectId,
+    input: DeletePackageIncludeInput,
+  ): Promise<PackageInclude> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Itinerary mavjudligini tekshiramiz
+    const targetInclude = await this.packageIncludeModel.findById(input._id);
+
+    if (!targetInclude) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(targetInclude.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 4. Agent egasi ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 5. O'chiramiz
+    const result = await this.packageIncludeModel.findByIdAndDelete(input._id);
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+    return result;
   }
 
-  public async deletePackageInclude(): Promise<string> {
-    return 'deletePackageInclude executed!';
-  }
+  public async getAllPackageIncludesByAdmin(packageId: ObjectId): Promise<PackageInclude[]> {
+    const targetPackage = await this.packageModel.findById(packageId);
 
-  public async getAllPackageIncludesByAdmin(): Promise<string> {
-    return 'getAllPackageIncludesByAdmin executed!';
-  }
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
 
+    return await this.packageIncludeModel
+      .find({
+        packageId,
+      })
+      .sort({
+        createdAt: 1,
+      })
+      .exec();
+  }
   //PackageExclude
 
-  public async getPackageExcludes(): Promise<string> {
-    return 'getPackageExcludes executed!';
+  public async createPackageExclude(
+    memberId: ObjectId,
+    input: PackageExcludeInput,
+  ): Promise<PackageExclude> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(input.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package shu agentniki ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 4. PackageInclude yaratamiz
+    const result = await this.packageExcludeModel.create(input);
+
+    return result;
   }
 
-  public async createPackageExclude(): Promise<string> {
-    return 'createPackageExclude executed!';
+  public async getPackageExcludes(packageId: ObjectId): Promise<PackageExclude[]> {
+    const targetPackage = await this.packageModel.findOne({
+      _id: packageId,
+      packageStatus: PackageStatus.ACTIVE,
+    });
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const result = await this.packageExcludeModel
+      .find({
+        packageId,
+      })
+      .sort({
+        createdAt: 1,
+      })
+      .exec();
+
+    return result;
   }
 
-  public async deletePackageExclude(): Promise<string> {
-    return 'deletePackageExclude executed!';
+  public async deletePackageExclude(
+    memberId: ObjectId,
+    input: DeletePackageExcludeInput,
+  ): Promise<PackageExclude> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Itinerary mavjudligini tekshiramiz
+    const targetInclude = await this.packageExcludeModel.findById(input._id);
+
+    if (!targetInclude) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(targetInclude.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 4. Agent egasi ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 5. O'chiramiz
+    const result = await this.packageExcludeModel.findByIdAndDelete(input._id);
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+    return result;
   }
 
-  public async getAllPackageExcludesByAdmin(): Promise<string> {
-    return 'getAllPackageExcludesByAdmin executed!';
+  public async getAllPackageExcludesByAdmin(packageId: ObjectId): Promise<PackageExclude[]> {
+    const targetPackage = await this.packageModel.findById(packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const result = await this.packageExcludeModel
+      .find({
+        packageId,
+      })
+      .sort({
+        createdAt: 1,
+      })
+      .exec();
+
+    return result;
   }
 
   //PackageTag
 
-  public async getPackageTags(): Promise<string> {
-    return 'getPackageTags executed!';
+  public async createPackageTag(memberId: ObjectId, input: PackageTagInput): Promise<PackageTag> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(input.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package shu agentniki ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 4. PackageInclude yaratamiz
+    const result = await this.packageTagModel.create(input);
+
+    return result;
   }
 
-  public async createPackageTag(): Promise<string> {
-    return 'updateItinerary executed!';
+  public async getPackageTags(packageId: ObjectId): Promise<PackageTag[]> {
+    const targetPackage = await this.packageModel.findOne({
+      _id: packageId,
+      packageStatus: PackageStatus.ACTIVE,
+    });
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const result = await this.packageTagModel
+      .find({
+        packageId,
+      })
+      .sort({
+        createdAt: 1,
+      })
+      .exec();
+
+    return result;
   }
 
-  public async deletePackageTag(): Promise<string> {
-    return 'deletePackageSchedule executed!';
+  public async deletePackageTag(
+    memberId: ObjectId,
+    input: DeletePackageTagInput,
+  ): Promise<PackageTag> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Itinerary mavjudligini tekshiramiz
+    const targetTag = await this.packageTagModel.findById(input._id);
+
+    if (!targetTag) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(targetTag.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 4. Agent egasi ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 5. O'chiramiz
+    const result = await this.packageTagModel.findByIdAndDelete(input._id);
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+    return result;
   }
 
-  public async getAllPackageTagsByAdmin(): Promise<string> {
-    return 'getAllPackageTagsByAdmin executed!';
+  public async getAllPackageTagsByAdmin(packageId: ObjectId): Promise<PackageTag[]> {
+    const targetPackage = await this.packageModel.findById(packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const result = await this.packageTagModel
+      .find({
+        packageId,
+      })
+      .sort({
+        createdAt: 1,
+      })
+      .exec();
+
+    return result;
   }
 
   //PackagePolicy

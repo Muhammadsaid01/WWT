@@ -10,7 +10,7 @@ export class PackageInclude {
   packageId: ObjectId;
 
   @Field(() => String)
-  title: string;
+  content: string;
 
   @Field(() => Date)
   createdAt: Date;

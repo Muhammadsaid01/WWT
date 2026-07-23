@@ -1,5 +1,6 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsNotEmpty, IsString, Length } from 'class-validator';
+import { IsMongoId, IsNotEmpty, IsString, Length } from 'class-validator';
+import { ObjectId } from 'mongoose';
 
 @InputType()
 export class PackageIncludeInput {
@@ -11,5 +12,12 @@ export class PackageIncludeInput {
   @IsString()
   @Length(2, 200)
   @Field(() => String)
-  title: string;
+  content: string;
+}
+
+@InputType()
+export class DeletePackageIncludeInput {
+  @IsMongoId()
+  @Field(() => String)
+  _id: ObjectId;
 }

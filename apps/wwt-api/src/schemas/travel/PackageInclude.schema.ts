@@ -8,7 +8,7 @@ const PackageIncludeSchema = new Schema(
       required: true,
     },
 
-    title: {
+    content: {
       type: String,
       required: true,
       trim: true,

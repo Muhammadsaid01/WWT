@@ -38,3 +38,11 @@ export class PackageScheduleInput {
   @Field(() => ScheduleStatus, { nullable: true })
   scheduleStatus?: ScheduleStatus;
 }
+
+@InputType()
+export class DeletePackageScheduleInput {
+  @IsNotEmpty()
+  @IsMongoId()
+  @Field(() => String)
+  _id: ObjectId;
+}
