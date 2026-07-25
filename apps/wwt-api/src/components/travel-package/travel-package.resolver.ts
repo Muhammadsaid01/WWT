@@ -19,6 +19,11 @@ import {
   DeletePackageIncludeInput,
   PackageIncludeInput,
 } from '../../libs/dto/travel-package/package-include.input';
+import { PackagePolicy } from '../../libs/dto/travel-package/package-policy';
+import {
+  DeletePackagePolicyInput,
+  PackagePolicyInput,
+} from '../../libs/dto/travel-package/package-policy.input';
 import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
 import {
   DeletePackageScheduleInput,
@@ -513,46 +518,62 @@ export class TravelPackageResolver {
   }
   @Roles(MemberType.ADMIN)
   @UseGuards(RolesGuard)
-  public async getAllPackageTagsByAdmin(
+  @Query(() => [PackageTag])
+  public async getAllPackageTagByAdmin(
     @Args('packageId') packageId: string,
   ): Promise<PackageTag[]> {
     console.log('Query: getAllPackageTagsByAdmin');
 
     const targetId = shapeIntoMongoObjectId(packageId);
-    return this.travelService.getAllPackageTagsByAdmin(targetId);
+    return this.travelService.getAllPackageTagByAdmin(targetId);
   }
 
   //PackagePolicy
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackagePolicy)
+  public async createPackagePolicy(
+    @Args('input') input: PackagePolicyInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackagePolicy> {
+    console.log('Mutation: createPackageTag');
+    console.log('memberId:', memberId);
 
-  @Mutation(() => String)
-  public async createPackagePolicy(): Promise<string> {
-    return this.travelService.createPackagePolicy();
+    input.packageId = shapeIntoMongoObjectId(input.packageId);
+    return this.travelService.createPackagePolicy(memberId, input);
   }
-
-  @Mutation(() => String)
-  public async updatePackagePolicy(): Promise<string> {
-    return this.updatePackagePolicy();
-  }
-
-  @Mutation(() => String)
-  public async deletePackagePolicy(): Promise<string> {
-    return this.travelService.deletePackagePolicy();
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackagePolicy)
+  public async deletePackagePolicy(
+    @Args('input') input: DeletePackagePolicyInput,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackagePolicy> {
+    console.log('Mutation: deletePackageTag');
+    input._id = shapeIntoMongoObjectId(input._id);
+    return this.travelService.deletePackagePolicy(memberId, input);
   }
 
   //PackagePolicy
-
-  @Query(() => String)
-  public async getPackagePolicy(): Promise<string> {
-    return this.getPackagePolicy();
+  @UseGuards(WithoutGuard)
+  @Query(() => [PackagePolicy])
+  public async getPackagePolicy(
+    @Args('packageId', { type: () => String })
+    packageId: string,
+  ): Promise<PackagePolicy[]> {
+    console.log('Query: getPackageTags');
+    const targetId = shapeIntoMongoObjectId(packageId);
+    return this.getPackagePolicy(targetId);
   }
 
-  @Query(() => String)
-  public async getAllPackagePoliciesByAdmin(): Promise<string> {
-    return this.travelService.getAllPackagePoliciesByAdmin();
-  }
-
-  @Mutation(() => String)
-  public async updatePackagePolicyByAdmin(): Promise<string> {
-    return this.travelService.updatePackagePolicyByAdmin();
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => [PackagePolicy])
+  public async getAllPackagePoliciesByAdmin(
+    @Args('packageId') packageId: string,
+  ): Promise<PackagePolicy[]> {
+    console.log('Query: getAllPackageTagsByAdmin');
+    const targetId = shapeIntoMongoObjectId(packageId);
+    return this.travelService.getAllPackagePoliciesByAdmin(targetId);
   }
 }

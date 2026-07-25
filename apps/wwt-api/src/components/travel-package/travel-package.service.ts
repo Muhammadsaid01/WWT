@@ -28,6 +28,10 @@ import {
   PackageIncludeInput,
 } from '../../libs/dto/travel-package/package-include.input';
 import { PackagePolicy } from '../../libs/dto/travel-package/package-policy';
+import {
+  DeletePackagePolicyInput,
+  PackagePolicyInput,
+} from '../../libs/dto/travel-package/package-policy.input';
 import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
 import {
   DeletePackageScheduleInput,
@@ -1118,7 +1122,7 @@ export class TravelPackageService {
     return result;
   }
 
-  public async getAllPackageTagsByAdmin(packageId: ObjectId): Promise<PackageTag[]> {
+  public async getAllPackageTagByAdmin(packageId: ObjectId): Promise<PackageTag[]> {
     const targetPackage = await this.packageModel.findById(packageId);
 
     if (!targetPackage) {
@@ -1139,28 +1143,105 @@ export class TravelPackageService {
 
   //PackagePolicy
 
-  public async createPackagePolicy(): Promise<string> {
-    return 'createPackagePolicy executed!';
+  public async createPackagePolicy(
+    memberId: ObjectId,
+    input: PackagePolicyInput,
+  ): Promise<PackagePolicy> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(input.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package shu agentniki ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 4. PackageInclude yaratamiz
+    const result = await this.packagePolicyModel.create(input);
+
+    return result;
   }
 
-  public async updatePackagePolicy(): Promise<string> {
-    return 'updatePackagePolicy executed!';
+  public async deletePackagePolicy(
+    memberId: ObjectId,
+    input: DeletePackagePolicyInput,
+  ): Promise<PackagePolicy> {
+    // 1. Agentni topamiz
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    // 2. Itinerary mavjudligini tekshiramiz
+    const targetTag = await this.packagePolicyModel.findById(input._id);
+
+    if (!targetTag) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 3. Package mavjudligini tekshiramiz
+    const targetPackage = await this.packageModel.findById(targetTag.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    // 4. Agent egasi ekanligini tekshiramiz
+    if (targetPackage.agentId.toString() !== agent._id.toString()) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    // 5. O'chiramiz
+    const result = await this.packagePolicyModel.findByIdAndDelete(input._id);
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+    return result;
   }
 
-  public async deletePackagePolicy(): Promise<string> {
-    return 'deletePackagePolicy executed!';
+  public async getPackagePolicy(packageId: ObjectId): Promise<PackagePolicy[]> {
+    const targetPackage = await this.packageModel.findOne({
+      _id: packageId,
+      packageStatus: PackageStatus.ACTIVE,
+    });
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const result = await this.packagePolicyModel
+      .find({
+        packageId,
+      })
+      .sort({
+        createdAt: 1,
+      })
+      .exec();
+
+    return result;
   }
 
-  public async getPackagePolicy(): Promise<string> {
-    return 'getPackagePolicy executed!';
-  }
+  public async getAllPackagePoliciesByAdmin(packageId: ObjectId): Promise<PackagePolicy[]> {
+    const targetPackage = await this.packageModel.findById(packageId);
 
-  public async getAllPackagePoliciesByAdmin(): Promise<string> {
-    return 'getAllPackagePoliciesByAdmin executed!';
-  }
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
 
-  public async updatePackagePolicyByAdmin(): Promise<string> {
-    return 'updatePackagePolicyByAdmin executed!';
+    const result = await this.packagePolicyModel
+      .find({
+        packageId,
+      })
+      .sort({
+        createdAt: 1,
+      })
+      .exec();
+
+    return result;
   }
 
   private generateSlug(title: string): string {
