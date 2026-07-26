@@ -82,6 +82,9 @@ export class Booking {
 
   // Aggregate lookup fields
 
+  @Field(() => Member, { nullable: true })
+  customerData?: Member;
+
   @Field(() => TravelPackage, { nullable: true })
   packageData?: TravelPackage;
 

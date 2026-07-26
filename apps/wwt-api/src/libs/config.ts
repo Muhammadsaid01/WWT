@@ -95,3 +95,19 @@ export const unwindBookingSchedule = {
     preserveNullAndEmptyArrays: true,
   },
 };
+
+export const lookupBookingCustomer = {
+  $lookup: {
+    from: 'members',
+    localField: 'memberId',
+    foreignField: '_id',
+    as: 'customerData',
+  },
+};
+
+export const unwindBookingCustomer = {
+  $unwind: {
+    path: '$customerData',
+    preserveNullAndEmptyArrays: true,
+  },
+};

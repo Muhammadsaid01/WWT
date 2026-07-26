@@ -1,4 +1,4 @@
-// eslint-disable-next-line prettier/prettier
+/* eslint-disable prettier/prettier */
 import {
   BadRequestException,
   Injectable,
@@ -8,15 +8,17 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { randomBytes } from 'crypto';
 import { Model, ObjectId } from 'mongoose';
-// eslint-disable-next-line prettier/prettier
+
 import {
   availableBookingSorts,
   lookupAgent,
+  lookupBookingCustomer,
   lookupBookingPackage,
   lookupBookingSchedule,
   lookupMember,
   shapeIntoMongoObjectId,
   unwindAgent,
+  unwindBookingCustomer,
   unwindBookingPackage,
   unwindBookingSchedule,
   unwindMember,
@@ -29,6 +31,7 @@ import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { BookingStatus } from '../../libs/enums/booking.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { PackageStatus } from '../../libs/enums/package.enum';
+import { AgentService } from '../agent/agent.service';
 
 @Injectable()
 export class BookingService {
@@ -44,6 +47,7 @@ export class BookingService {
 
     @InjectModel('PackageSchedule')
     private readonly packageScheduleModel: Model<PackageSchedule>,
+    private agentService: AgentService,
   ) {}
 
   public async createBooking(memberId: ObjectId, input: BookingInput): Promise<Booking> {
@@ -234,129 +238,12 @@ export class BookingService {
   }
 
   public async getMyBookings(memberId: ObjectId, input: BookingsInquiry): Promise<Bookings> {
-    const { page, limit, sort = 'createdAt', direction = Direction.DESC, search } = input;
-
-    const match: Record<string, any> = {
+    const match = {
       memberId,
       bookingDeletedAt: null,
     };
 
-    /*
-     * Booking status filter
-     */
-    if (search?.bookingStatus) {
-      match.bookingStatus = search.bookingStatus;
-    }
-
-    /*
-     * Package filter
-     */
-    if (search?.packageId) {
-      match.packageId = shapeIntoMongoObjectId(search.packageId);
-    }
-
-    /*
-     * Agent filter
-     */
-    if (search?.agentId) {
-      match.agentId = shapeIntoMongoObjectId(search.agentId);
-    }
-
-    /*
-     * Text search
-     */
-    if (search?.text) {
-      const escapedText = search.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-      match.$or = [
-        {
-          bookingCode: {
-            $regex: escapedText,
-            $options: 'i',
-          },
-        },
-        {
-          contactName: {
-            $regex: escapedText,
-            $options: 'i',
-          },
-        },
-        {
-          contactPhone: {
-            $regex: escapedText,
-            $options: 'i',
-          },
-        },
-        {
-          contactEmail: {
-            $regex: escapedText,
-            $options: 'i',
-          },
-        },
-      ];
-    }
-
-    /*
-     * Faqat ruxsat berilgan field bo‘yicha sort
-     */
-    const sortField = availableBookingSorts.includes(sort) ? sort : 'createdAt';
-
-    const sortDirection = direction === Direction.ASC ? 1 : -1;
-
-    const result = await this.bookingModel
-      .aggregate([
-        {
-          $match: match,
-        },
-
-        {
-          $facet: {
-            list: [
-              {
-                $sort: {
-                  [sortField]: sortDirection,
-                },
-              },
-              {
-                $skip: (page - 1) * limit,
-              },
-              {
-                $limit: limit,
-              },
-              lookupBookingPackage,
-              unwindBookingPackage,
-
-              lookupBookingSchedule,
-              unwindBookingSchedule,
-
-              lookupAgent,
-              unwindAgent,
-
-              lookupMember,
-              unwindMember,
-            ],
-
-            metaCounter: [
-              {
-                $count: 'total',
-              },
-            ],
-          },
-        },
-      ])
-      .exec();
-
-    if (!result.length) {
-      return {
-        list: [],
-        metaCounter: [{ total: 0 }],
-      };
-    }
-
-    return {
-      list: result[0].list,
-      metaCounter: result[0].metaCounter.length > 0 ? result[0].metaCounter : [{ total: 0 }],
-    };
+    return await this.bookingPagination(match, input);
   }
 
   public async getMyBooking(memberId: ObjectId, bookingId: ObjectId): Promise<Booking> {
@@ -389,6 +276,113 @@ export class BookingService {
     return result[0];
   }
 
+  public async getBookingsByAgent(memberId: ObjectId, input: BookingsInquiry): Promise<Bookings> {
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    const match = {
+      agentId: agent._id,
+      bookingDeletedAt: null,
+    };
+
+    return await this.bookingPagination(match, input);
+  }
+
+  public async getBookingByAgent(memberId: ObjectId, bookingId: ObjectId): Promise<Booking> {
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    const result = await this.bookingModel.aggregate([
+      {
+        $match: {
+          _id: bookingId,
+          agentId: agent._id,
+          bookingDeletedAt: null,
+        },
+      },
+
+      lookupBookingPackage,
+      unwindBookingPackage,
+
+      lookupBookingSchedule,
+      unwindBookingSchedule,
+
+      lookupAgent,
+      unwindAgent,
+
+      /*
+       * Booking qilgan customer ma'lumoti.
+       *
+       * Bu yerda oldingi lookupMember helper ishlamaydi,
+       * chunki u agentData.memberId orqali lookup qiladi.
+       */
+      lookupBookingCustomer,
+      unwindBookingCustomer,
+    ]);
+
+    if (!result.length) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return result[0];
+  }
+
+  public async updateBookingStatus(
+    memberId: ObjectId,
+    bookingId: ObjectId,
+    bookingStatus: BookingStatus,
+  ): Promise<Booking> {
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    const targetBooking = await this.bookingModel.findOne({
+      _id: bookingId,
+      agentId: agent._id,
+      bookingDeletedAt: null,
+    });
+
+    if (!targetBooking) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    if (targetBooking.bookingStatus === bookingStatus) {
+      throw new BadRequestException(`Booking status is already ${bookingStatus}.`);
+    }
+
+    const allowedTransitions: Record<BookingStatus, BookingStatus[]> = {
+      [BookingStatus.PENDING]: [BookingStatus.CONFIRMED, BookingStatus.REJECTED],
+
+      [BookingStatus.CONFIRMED]: [BookingStatus.COMPLETED],
+
+      [BookingStatus.CANCELLED]: [],
+
+      [BookingStatus.COMPLETED]: [],
+
+      [BookingStatus.REJECTED]: [],
+    };
+
+    const currentStatus = targetBooking.bookingStatus;
+
+    const availableStatuses = allowedTransitions[currentStatus];
+
+    if (!availableStatuses || !availableStatuses.includes(bookingStatus)) {
+      throw new BadRequestException(
+        `Cannot change booking status from ${currentStatus} to ${bookingStatus}.`,
+      );
+    }
+
+    targetBooking.bookingStatus = bookingStatus;
+
+    return await targetBooking.save();
+  }
+
+  public async getAllBookingsByAdmin(input: BookingsInquiry): Promise<Bookings> {
+    const match = {
+      bookingDeletedAt: null,
+    };
+
+    return await this.bookingPagination(match, input);
+  }
+
+  //Private Functions
+
   private async generateBookingCode(): Promise<string> {
     let bookingCode: string;
     let existingBooking: Booking | null;
@@ -408,5 +402,114 @@ export class BookingService {
     } while (existingBooking);
 
     return bookingCode;
+  }
+
+  private async bookingPagination(match: any, input: BookingsInquiry): Promise<Bookings> {
+    const { page, limit, sort = 'createdAt', direction = Direction.DESC, search } = input;
+
+    if (search?.bookingStatus) {
+      match.bookingStatus = search.bookingStatus;
+    }
+
+    if (search?.packageId) {
+      match.packageId = shapeIntoMongoObjectId(search.packageId);
+    }
+
+    if (search?.memberId) {
+      match.memberId = shapeIntoMongoObjectId(search.memberId);
+    }
+
+    if (search?.agentId) {
+      match.agentId = shapeIntoMongoObjectId(search.agentId);
+    }
+
+    if (search?.text) {
+      const escapedText = search.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      match.$or = [
+        {
+          bookingCode: {
+            $regex: escapedText,
+            $options: 'i',
+          },
+        },
+        {
+          contactName: {
+            $regex: escapedText,
+            $options: 'i',
+          },
+        },
+        {
+          contactPhone: {
+            $regex: escapedText,
+            $options: 'i',
+          },
+        },
+        {
+          contactEmail: {
+            $regex: escapedText,
+            $options: 'i',
+          },
+        },
+      ];
+    }
+
+    const sortField = availableBookingSorts.includes(sort) ? sort : 'createdAt';
+
+    const sortDirection = direction === Direction.ASC ? 1 : -1;
+
+    const result = await this.bookingModel.aggregate([
+      {
+        $match: match,
+      },
+
+      lookupBookingPackage,
+      unwindBookingPackage,
+
+      lookupBookingSchedule,
+      unwindBookingSchedule,
+
+      lookupAgent,
+      unwindAgent,
+
+      lookupMember,
+      unwindMember,
+
+      {
+        $facet: {
+          list: [
+            {
+              $sort: {
+                [sortField]: sortDirection,
+              },
+            },
+            {
+              $skip: (page - 1) * limit,
+            },
+            {
+              $limit: limit,
+            },
+          ],
+
+          metaCounter: [
+            {
+              $count: 'total',
+            },
+          ],
+        },
+      },
+    ]);
+
+    if (!result.length) {
+      return {
+        list: [],
+        metaCounter: [{ total: 0 }],
+      };
+    }
+
+    return {
+      list: result[0].list,
+      metaCounter: result[0].metaCounter.length > 0 ? result[0].metaCounter : [{ total: 0 }],
+    };
   }
 }

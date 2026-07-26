@@ -1,13 +1,15 @@
+/* eslint-disable prettier/prettier */
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
 
 import { Booking, Bookings } from '../../libs/dto/booking/booking';
-// eslint-disable-next-line prettier/prettier
+
 import {
   BookingInput,
   BookingsInquiry,
   CancelBookingInput,
+  UpdateBookingStatusInput,
 } from '../../libs/dto/booking/booking.input';
 import { BookingService } from './booking.service';
 
@@ -74,5 +76,55 @@ export class BookingResolver {
     const targetBookingId = shapeIntoMongoObjectId(bookingId);
 
     return await this.bookingService.getMyBooking(targetMemberId, targetBookingId);
+  }
+
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Query(() => Bookings)
+  public async getBookingsByAgent(
+    @AuthMember('_id') memberId: ObjectId,
+    @Args('input') input: BookingsInquiry,
+  ): Promise<Bookings> {
+    console.log('Query: getBookingsByAgent');
+
+    const targetMemberId = shapeIntoMongoObjectId(memberId);
+
+    return await this.bookingService.getBookingsByAgent(targetMemberId, input);
+  }
+
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Query(() => Booking)
+  public async getBookingByAgent(
+    @AuthMember('_id') memberId: ObjectId,
+    @Args('bookingId', { type: () => String }) bookingId: string,
+  ): Promise<Booking> {
+    console.log('Query: getBookingByAgent');
+
+    const targetMemberId = shapeIntoMongoObjectId(memberId);
+
+    const targetBookingId = shapeIntoMongoObjectId(bookingId);
+
+    return this.bookingService.getBookingByAgent(targetMemberId, targetBookingId);
+  }
+
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => Booking)
+  public async updateBookingStatus(
+    @AuthMember('_id') memberId: ObjectId,
+    @Args('input') input: UpdateBookingStatusInput,
+  ): Promise<Booking> {
+    console.log('Mutation: updateBookingStatus');
+
+    const targetMemberId = shapeIntoMongoObjectId(memberId);
+
+    const targetBookingId = shapeIntoMongoObjectId(input.bookingId);
+
+    return this.bookingService.updateBookingStatus(
+      targetMemberId,
+      targetBookingId,
+      input.bookingStatus,
+    );
   }
 }

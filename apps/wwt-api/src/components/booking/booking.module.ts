@@ -8,6 +8,7 @@ import MemberSchema from '../../schemas//accounts/Member.schema';
 import BookingSchema from '../../schemas//bookings/Booking.schema';
 import TravelPackageSchema from '../../schemas/travel/Package.schema';
 import PackageScheduleSchema from '../../schemas/travel/PackageSchedule.schema';
+import { AgentModule } from '../agent/agent.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { AuthModule } from '../auth/auth.module';
       { name: 'PackageSchedule', schema: PackageScheduleSchema },
     ]),
     AuthModule,
+    AgentModule,
   ],
   providers: [BookingResolver, BookingService],
   exports: [BookingService],
