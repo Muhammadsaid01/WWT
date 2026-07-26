@@ -381,6 +381,88 @@ export class BookingService {
     return await this.bookingPagination(match, input);
   }
 
+  public async getBookingByAdmin(bookingId: ObjectId): Promise<Booking> {
+    const result = await this.bookingModel.aggregate([
+      {
+        $match: {
+          _id: bookingId,
+          bookingDeletedAt: null,
+        },
+      },
+
+      lookupBookingPackage,
+      unwindBookingPackage,
+
+      lookupBookingSchedule,
+      unwindBookingSchedule,
+
+      lookupAgent,
+      unwindAgent,
+
+      lookupBookingCustomer,
+      unwindBookingCustomer,
+    ]);
+
+    if (!result.length) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return result[0];
+  }
+
+  public async updateBookingByAdmin(
+    bookingId: ObjectId,
+    bookingStatus: BookingStatus,
+  ): Promise<Booking> {
+    const targetBooking = await this.bookingModel.findOne({
+      _id: bookingId,
+      bookingDeletedAt: null,
+    });
+
+    if (!targetBooking) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const currentStatus = targetBooking.bookingStatus;
+
+    if (currentStatus === bookingStatus) {
+      throw new BadRequestException(`Booking status is already ${bookingStatus}.`);
+    }
+
+    targetBooking.bookingStatus = bookingStatus;
+
+    if (bookingStatus === BookingStatus.CANCELLED) {
+      targetBooking.cancelledAt = new Date();
+    }
+
+    if (currentStatus === BookingStatus.CANCELLED && bookingStatus !== BookingStatus.CANCELLED) {
+      targetBooking.cancelledAt = null;
+    }
+
+    return await targetBooking.save();
+  }
+
+  public async deleteBookingByAdmin(bookingId: ObjectId): Promise<Booking> {
+    const result = await this.bookingModel.findOneAndUpdate(
+      {
+        _id: bookingId,
+        bookingDeletedAt: null,
+      },
+      {
+        bookingDeletedAt: new Date(),
+      },
+      {
+        new: true,
+      },
+    );
+
+    if (!result) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return result;
+  }
+
   //Private Functions
 
   private async generateBookingCode(): Promise<string> {

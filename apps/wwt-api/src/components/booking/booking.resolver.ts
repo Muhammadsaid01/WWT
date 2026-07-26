@@ -127,4 +127,52 @@ export class BookingResolver {
       input.bookingStatus,
     );
   }
+
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => Bookings)
+  public async getAllBookingsByAdmin(@Args('input') input: BookingsInquiry): Promise<Bookings> {
+    console.log('Query: getAllBookingsByAdmin');
+
+    return await this.bookingService.getAllBookingsByAdmin(input);
+  }
+
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => Booking)
+  public async getBookingByAdmin(
+    @Args('bookingId', { type: () => String }) bookingId: string,
+  ): Promise<Booking> {
+    console.log('Query: getBookingByAdmin');
+
+    const targetBookingId = shapeIntoMongoObjectId(bookingId);
+
+    return await this.bookingService.getBookingByAdmin(targetBookingId);
+  }
+
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Mutation(() => Booking)
+  public async updateBookingByAdmin(
+    @Args('input') input: UpdateBookingStatusInput,
+  ): Promise<Booking> {
+    console.log('Mutation: updateBookingByAdmin');
+
+    const bookingId = shapeIntoMongoObjectId(input.bookingId);
+
+    return await this.bookingService.updateBookingByAdmin(bookingId, input.bookingStatus);
+  }
+
+  @Roles(MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Mutation(() => Booking)
+  public async deleteBookingByAdmin(
+    @Args('bookingId', { type: () => String }) bookingId: string,
+  ): Promise<Booking> {
+    console.log('Mutation: deleteBookingByAdmin');
+
+    const targetBookingId = shapeIntoMongoObjectId(bookingId);
+
+    return await this.bookingService.deleteBookingByAdmin(targetBookingId);
+  }
 }
