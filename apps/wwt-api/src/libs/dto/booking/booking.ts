@@ -1,7 +1,10 @@
 import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
 import { BookingStatus } from '../../enums/booking.enum';
-import { TotalCounter } from '../member/member';
+import { Agent } from '../agent/agent';
+import { Member, TotalCounter } from '../member/member';
+import { PackageSchedule } from '../travel-package/package-schedule';
+import { TravelPackage } from '../travel-package/travel-package';
 
 @ObjectType()
 export class Booking {
@@ -76,6 +79,20 @@ export class Booking {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  // Aggregate lookup fields
+
+  @Field(() => TravelPackage, { nullable: true })
+  packageData?: TravelPackage;
+
+  @Field(() => PackageSchedule, { nullable: true })
+  scheduleData?: PackageSchedule;
+
+  @Field(() => Agent, { nullable: true })
+  agentData?: Agent;
+
+  @Field(() => Member, { nullable: true })
+  memberData?: Member;
 }
 
 @ObjectType()

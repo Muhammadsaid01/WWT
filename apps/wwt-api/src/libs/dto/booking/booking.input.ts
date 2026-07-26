@@ -1,5 +1,6 @@
-import { Field, Float, InputType, Int } from '@nestjs/graphql';
+import { Field, InputType, Int } from '@nestjs/graphql';
 import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { ObjectId } from 'mongoose';
 import { BookingStatus } from '../../enums/booking.enum';
 import { Direction } from '../../enums/common.enum';
 
@@ -12,10 +13,6 @@ export class BookingInput {
   @IsNotEmpty()
   @Field(() => String)
   scheduleId: string;
-
-  @IsNotEmpty()
-  @Field(() => String)
-  agentId: string;
 
   @IsOptional()
   @Min(0)
@@ -32,31 +29,6 @@ export class BookingInput {
   @Field(() => Int, { nullable: true })
   infantCount?: number;
 
-  @IsNotEmpty()
-  @Min(1)
-  @Field(() => Int)
-  peopleCount: number;
-
-  @IsNotEmpty()
-  @Min(0)
-  @Field(() => Float)
-  totalPrice: number;
-
-  @IsOptional()
-  @Min(0)
-  @Field(() => Float, { nullable: true })
-  discountAmount?: number;
-
-  @IsNotEmpty()
-  @Min(0)
-  @Field(() => Float)
-  finalPrice: number;
-
-  @IsOptional()
-  @IsString()
-  @Field(() => String, { nullable: true })
-  currency?: string;
-
   @IsOptional()
   @Field(() => String, { nullable: true })
   couponId?: string;
@@ -72,6 +44,11 @@ export class BookingInput {
   contactPhone: string;
 
   @IsOptional()
+  @IsString()
+  @Field(() => String)
+  currency: string;
+
+  @IsOptional()
   @IsEmail()
   @Field(() => String, { nullable: true })
   contactEmail?: string;
@@ -81,7 +58,6 @@ export class BookingInput {
   @Field(() => String, { nullable: true })
   specialRequest?: string;
 }
-
 @InputType()
 class BISearch {
   @IsOptional()
@@ -147,7 +123,7 @@ export class UpdateBookingStatusInput {
 export class CancelBookingInput {
   @IsNotEmpty()
   @Field(() => String)
-  bookingId: string;
+  _id: ObjectId;
 
   @IsOptional()
   @IsString()

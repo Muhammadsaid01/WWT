@@ -52,3 +52,46 @@ export const unwindMember = {
     preserveNullAndEmptyArrays: true,
   },
 };
+
+//BOOKING
+export const availableBookingSorts = [
+  'createdAt',
+  'updatedAt',
+  'bookingCode',
+  'bookingStatus',
+  'peopleCount',
+  'totalPrice',
+  'finalPrice',
+];
+
+export const lookupBookingPackage = {
+  $lookup: {
+    from: 'travelPackages',
+    localField: 'packageId',
+    foreignField: '_id',
+    as: 'packageData',
+  },
+};
+
+export const unwindBookingPackage = {
+  $unwind: {
+    path: '$packageData',
+    preserveNullAndEmptyArrays: true,
+  },
+};
+
+export const lookupBookingSchedule = {
+  $lookup: {
+    from: 'packageSchedules',
+    localField: 'scheduleId',
+    foreignField: '_id',
+    as: 'scheduleData',
+  },
+};
+
+export const unwindBookingSchedule = {
+  $unwind: {
+    path: '$scheduleData',
+    preserveNullAndEmptyArrays: true,
+  },
+};
