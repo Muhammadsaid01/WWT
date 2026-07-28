@@ -12,15 +12,6 @@ export class PaymentInput {
   @IsEnum(PaymentMethod)
   @Field(() => PaymentMethod)
   paymentMethod: PaymentMethod;
-
-  @IsNotEmpty()
-  @Min(0)
-  @Field(() => Float)
-  paymentAmount: number;
-
-  @IsOptional()
-  @Field(() => String, { nullable: true })
-  currency?: string;
 }
 
 @InputType()

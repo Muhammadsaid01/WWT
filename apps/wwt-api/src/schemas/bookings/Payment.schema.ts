@@ -15,6 +15,12 @@ const PaymentSchema = new Schema(
       required: true,
     },
 
+    agentId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: 'Agent',
+    },
+
     paymentMethod: {
       type: String,
       enum: PaymentMethod,

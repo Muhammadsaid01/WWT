@@ -607,4 +607,21 @@ export class BookingService {
 
     return booking;
   }
+
+  public async updateBookingStatusForPayment(
+    bookingId: ObjectId,
+    bookingStatus: BookingStatus,
+  ): Promise<void> {
+    await this.bookingModel.findOneAndUpdate(
+      {
+        _id: bookingId,
+        bookingDeletedAt: null,
+      },
+      {
+        $set: {
+          bookingStatus,
+        },
+      },
+    );
+  }
 }

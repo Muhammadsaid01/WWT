@@ -13,6 +13,9 @@ export class Payment {
   @Field(() => String)
   memberId: ObjectId;
 
+  @Field(() => String)
+  agentId: ObjectId;
+
   @Field(() => PaymentMethod)
   paymentMethod: PaymentMethod;
 
