@@ -594,4 +594,17 @@ export class BookingService {
       metaCounter: result[0].metaCounter.length > 0 ? result[0].metaCounter : [{ total: 0 }],
     };
   }
+
+  public async findActiveBookingById(bookingId: ObjectId): Promise<Booking> {
+    const booking = await this.bookingModel.findOne({
+      _id: bookingId,
+      bookingDeletedAt: null,
+    });
+
+    if (!booking) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return booking;
+  }
 }
