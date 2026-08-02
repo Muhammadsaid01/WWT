@@ -1,7 +1,9 @@
 import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
 import { ReviewStatus } from '../../enums/community.enum';
-import { TotalCounter } from '../member/member';
+import { Booking } from '../booking/booking';
+import { Member, TotalCounter } from '../member/member';
+import { TravelPackage } from '../travel-package/travel-package';
 
 @ObjectType()
 export class Review {
@@ -46,6 +48,15 @@ export class Review {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  @Field(() => Member, { nullable: true })
+  memberData?: Member;
+
+  @Field(() => TravelPackage, { nullable: true })
+  packageData?: TravelPackage;
+
+  @Field(() => Booking, { nullable: true })
+  bookingData?: Booking;
 }
 
 @ObjectType()

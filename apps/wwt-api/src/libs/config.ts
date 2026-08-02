@@ -159,3 +159,51 @@ export const unwindUsageMember = {
     preserveNullAndEmptyArrays: true,
   },
 };
+
+export const lookupReviewMember = {
+  $lookup: {
+    from: 'members',
+    localField: 'memberId',
+    foreignField: '_id',
+    as: 'memberData',
+  },
+};
+
+export const unwindReviewMember = {
+  $unwind: {
+    path: '$memberData',
+    preserveNullAndEmptyArrays: true,
+  },
+};
+
+export const lookupReviewPackage = {
+  $lookup: {
+    from: 'travelPackages',
+    localField: 'packageId',
+    foreignField: '_id',
+    as: 'packageData',
+  },
+};
+
+export const unwindReviewPackage = {
+  $unwind: {
+    path: '$packageData',
+    preserveNullAndEmptyArrays: true,
+  },
+};
+
+export const lookupReviewBooking = {
+  $lookup: {
+    from: 'bookings',
+    localField: 'bookingId',
+    foreignField: '_id',
+    as: 'bookingData',
+  },
+};
+
+export const unwindReviewBooking = {
+  $unwind: {
+    path: '$bookingData',
+    preserveNullAndEmptyArrays: true,
+  },
+};

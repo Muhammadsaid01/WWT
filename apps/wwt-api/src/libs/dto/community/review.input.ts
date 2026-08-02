@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Direction } from '../../enums/common.enum';
 import { ReviewStatus } from '../../enums/community.enum';
 
@@ -10,35 +10,20 @@ export class ReviewInput {
   @Field(() => String)
   bookingId: string;
 
-  @IsNotEmpty()
-  @Field(() => String)
-  packageId: string;
-
-  @IsNotEmpty()
-  @Field(() => String)
-  agentId: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(2, 100)
-  @Field(() => String, { nullable: true })
-  reviewTitle?: string;
-
-  @IsNotEmpty()
-  @IsString()
-  @Length(5, 2000)
-  @Field(() => String)
-  reviewContent: string;
-
-  @IsNotEmpty()
   @Min(1)
   @Max(5)
   @Field(() => Float)
   reviewRating: number;
 
   @IsOptional()
-  @Field(() => [String], { nullable: true })
-  reviewImages?: string[];
+  @IsString()
+  @Field(() => String, { nullable: true })
+  reviewTitle?: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @Field(() => String)
+  reviewContent: string;
 }
 
 @InputType()
@@ -63,6 +48,7 @@ class RISearch {
   @IsOptional()
   @Field(() => String, { nullable: true })
   text?: string;
+  reviewRating: any;
 }
 
 @InputType()
