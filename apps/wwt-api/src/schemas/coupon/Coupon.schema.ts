@@ -55,6 +55,13 @@ const CouponSchema = new Schema(
       default: 0,
     },
 
+    perUserLimit: {
+      type: Number,
+      required: true,
+      default: 1,
+      min: 1,
+    },
+
     validFrom: {
       type: Date,
       required: true,

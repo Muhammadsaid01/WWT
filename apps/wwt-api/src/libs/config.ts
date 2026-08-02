@@ -111,3 +111,51 @@ export const unwindBookingCustomer = {
     preserveNullAndEmptyArrays: true,
   },
 };
+
+export const lookupUsageCoupon = {
+  $lookup: {
+    from: 'coupons',
+    localField: 'couponId',
+    foreignField: '_id',
+    as: 'couponData',
+  },
+};
+
+export const unwindUsageCoupon = {
+  $unwind: {
+    path: '$couponData',
+    preserveNullAndEmptyArrays: true,
+  },
+};
+
+export const lookupUsageBooking = {
+  $lookup: {
+    from: 'bookings',
+    localField: 'bookingId',
+    foreignField: '_id',
+    as: 'bookingData',
+  },
+};
+
+export const unwindUsageBooking = {
+  $unwind: {
+    path: '$bookingData',
+    preserveNullAndEmptyArrays: true,
+  },
+};
+
+export const lookupUsageMember = {
+  $lookup: {
+    from: 'members',
+    localField: 'memberId',
+    foreignField: '_id',
+    as: 'memberData',
+  },
+};
+
+export const unwindUsageMember = {
+  $unwind: {
+    path: '$memberData',
+    preserveNullAndEmptyArrays: true,
+  },
+};

@@ -24,6 +24,9 @@ const CouponUsageSchema = new Schema(
       type: Number,
       required: true,
     },
+    usedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
@@ -31,7 +34,15 @@ const CouponUsageSchema = new Schema(
   },
 );
 
-CouponUsageSchema.index({ couponId: 1, memberId: 1 }, { unique: true });
-CouponUsageSchema.index({ bookingId: 1 });
+CouponUsageSchema.index(
+  {
+    couponId: 1,
+    memberId: 1,
+    bookingId: 1,
+  },
+  {
+    unique: true,
+  },
+);
 
 export default CouponUsageSchema;

@@ -1,6 +1,7 @@
 /* eslint-disable prettier/prettier */
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   UnauthorizedException,
@@ -30,8 +31,9 @@ import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule'
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { BookingStatus } from '../../libs/enums/booking.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
-import { PackageStatus } from '../../libs/enums/package.enum';
+import { PackageStatus, ScheduleStatus } from '../../libs/enums/package.enum';
 import { AgentService } from '../agent/agent.service';
+import { CouponService } from '../coupon/coupon.service';
 
 @Injectable()
 export class BookingService {
@@ -48,6 +50,7 @@ export class BookingService {
     @InjectModel('PackageSchedule')
     private readonly packageScheduleModel: Model<PackageSchedule>,
     private agentService: AgentService,
+    private readonly couponService: CouponService,
   ) {}
 
   public async createBooking(memberId: ObjectId, input: BookingInput): Promise<Booking> {
@@ -55,7 +58,7 @@ export class BookingService {
       const {
         packageId,
         scheduleId,
-        couponId,
+        couponCode,
         adultCount = 1,
         childCount = 0,
         infantCount = 0,
@@ -70,10 +73,8 @@ export class BookingService {
 
       const targetScheduleId = shapeIntoMongoObjectId(scheduleId);
 
-      const targetCouponId = couponId ? shapeIntoMongoObjectId(couponId) : null;
-
       /*
-       * 2. Member mavjudligini tekshirish
+       * 2. Member tekshiruvi
        */
       const targetMember = await this.memberModel
         .findOne({
@@ -83,45 +84,36 @@ export class BookingService {
         .exec();
 
       if (!targetMember) {
-        throw new BadRequestException('Member not found');
+        throw new BadRequestException('Member not found.');
       }
 
       /*
-       * 3. Package mavjudligini tekshirish
+       * 3. Travel package tekshiruvi
        */
       const targetPackage = await this.travelPackageModel
         .findOne({
           _id: targetPackageId,
-          packageDeletedAt: null,
+          packageStatus: PackageStatus.ACTIVE,
         })
         .exec();
 
       if (!targetPackage) {
-        throw new BadRequestException('Travel package not found');
+        throw new BadRequestException('Travel package not found or inactive.');
       }
 
       /*
-       * Package status maydoni mavjud bo‘lsa,
-       * ACTIVE ekanligini ham tekshir.
-       */
-
-      if (targetPackage.packageStatus !== PackageStatus.ACTIVE) {
-        throw new BadRequestException('This package is not available for booking');
-      }
-
-      /*
-       * 4. Schedule mavjudligini va aynan shu
-       * packagega tegishli ekanligini tekshirish
+       * 4. Schedule tekshiruvi
        */
       const targetSchedule = await this.packageScheduleModel
         .findOne({
           _id: targetScheduleId,
           packageId: targetPackageId,
+          scheduleStatus: ScheduleStatus.OPEN,
         })
         .exec();
 
       if (!targetSchedule) {
-        throw new BadRequestException('Package schedule not found');
+        throw new BadRequestException('Package schedule not found or unavailable.');
       }
 
       /*
@@ -130,19 +122,20 @@ export class BookingService {
       const peopleCount = adultCount + childCount + infantCount;
 
       if (peopleCount < 1) {
-        throw new BadRequestException('At least one traveler is required');
+        throw new BadRequestException('At least one traveler is required.');
+      }
+
+      if (targetSchedule.availableSeats < peopleCount) {
+        throw new BadRequestException('Not enough available seats.');
       }
 
       /*
-       * 6. Narxni server ichida hisoblash
-       *
-       * Hozircha hamma traveler uchun bir xil
-       * packagePrice ishlatilmoqda.
+       * 6. Narxni hisoblash
        */
       const packagePrice = Number(targetPackage.packagePrice);
 
       if (Number.isNaN(packagePrice) || packagePrice < 0) {
-        throw new BadRequestException('Invalid package price');
+        throw new BadRequestException('Invalid package price.');
       }
 
       const adultTotal = packagePrice * adultCount;
@@ -154,20 +147,30 @@ export class BookingService {
       const totalPrice = adultTotal + childTotal + infantTotal;
 
       /*
-       * Coupon module tayyor bo‘lmagani uchun
-       * discount hozircha 0.
+       * 7. Coupon natijalari uchun default qiymatlar
        */
-      const discountAmount = 0;
-
-      const finalPrice = Math.max(totalPrice - discountAmount, 0);
+      let targetCouponId: ObjectId | null = null;
+      let discountAmount = 0;
+      let finalPrice = totalPrice;
 
       /*
-       * 7. Booking code yaratish
+       * 8. Coupon yuborilgan bo‘lsa tekshiramiz
+       */
+      if (couponCode?.trim()) {
+        const couponResult = await this.couponService.applyCoupon(memberId, couponCode, totalPrice);
+
+        targetCouponId = couponResult.couponId;
+        discountAmount = couponResult.discountAmount;
+        finalPrice = couponResult.finalPrice;
+      }
+
+      /*
+       * 9. Booking code
        */
       const bookingCode = await this.generateBookingCode();
 
       /*
-       * 8. Booking yaratish
+       * 10. Booking yaratish
        */
       const createdBooking = await this.bookingModel.create({
         ...bookingData,
@@ -195,11 +198,43 @@ export class BookingService {
         couponId: targetCouponId,
       });
 
+      /*
+       * 11. Coupon ishlatilgan bo‘lsa usage yaratamiz
+       */
+      if (targetCouponId) {
+        await this.couponService.createCouponUsage({
+          couponId: targetCouponId,
+          memberId,
+          bookingId: createdBooking._id,
+          discountAmount,
+        });
+
+        await this.couponService.increaseUsedCount(targetCouponId);
+      }
+
+      /*
+       * 12. Schedule joyini kamaytirish
+       */
+      await this.packageScheduleModel.findOneAndUpdate(
+        {
+          _id: targetScheduleId,
+          packageId: targetPackageId,
+          availableSeats: {
+            $gte: peopleCount,
+          },
+        },
+        {
+          $inc: {
+            availableSeats: -peopleCount,
+          },
+        },
+      );
+
       return createdBooking;
     } catch (error) {
       console.log('Error, Service createBooking:', error);
 
-      if (error instanceof BadRequestException) {
+      if (error instanceof HttpException) {
         throw error;
       }
 

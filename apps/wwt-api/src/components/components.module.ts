@@ -10,7 +10,6 @@ import { AiModule } from './ai/ai.module';
 import { BoardArticleModule } from './board-article/board-article.module';
 import { CommentsModule } from './comments/comments.module';
 import { CommunityModule } from './community/community.module';
-import { DiscountModule } from './discount/discount.module';
 import { FaqModule } from './faq/faq.module';
 import { FollowModule } from './follow/follow.module';
 import { LikesModule } from './likes/likes.module';
@@ -22,6 +21,7 @@ import { ReportModule } from './report/report.module';
 import { ReviewModule } from './review/review.module';
 import { TravelerModule } from './traveler/traveler.module';
 import { ViewModule } from './view/view.module';
+import { CouponModule } from './coupon/coupon.module';
 
 @Module({
   imports: [
@@ -41,13 +41,13 @@ import { ViewModule } from './view/view.module';
     NotificationModule,
     NoticeModule,
     ReportModule,
-    DiscountModule,
     CommunityModule,
     BoardArticleModule,
     OpenchatModule,
     AiModule,
     FaqModule,
     AgentRequestModule,
+    CouponModule,
   ],
 })
 export class ComponentsModule {}

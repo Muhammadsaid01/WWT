@@ -30,8 +30,9 @@ export class BookingInput {
   infantCount?: number;
 
   @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
-  couponId?: string;
+  couponCode?: string;
 
   @IsNotEmpty()
   @IsString()

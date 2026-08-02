@@ -55,6 +55,10 @@ export class CouponInput {
   @Field(() => Int, { nullable: true })
   usageLimit?: number;
 
+  @Field(() => Int)
+  @Min(1)
+  perUserLimit: number;
+
   @IsNotEmpty()
   @IsDateString()
   @Field(() => String)
@@ -67,19 +71,25 @@ export class CouponInput {
 }
 
 @InputType()
-class CouponSearch {
+export class CouponSearch {
+  @IsOptional()
+  @IsString()
+  @Field(() => String, { nullable: true })
+  text?: string;
+
+  @IsOptional()
+  @IsEnum(CouponType)
+  @Field(() => CouponType, { nullable: true })
+  couponType?: CouponType;
+
   @IsOptional()
   @IsEnum(CouponStatus)
   @Field(() => CouponStatus, { nullable: true })
   couponStatus?: CouponStatus;
-
-  @IsOptional()
-  @Field(() => String, { nullable: true })
-  text?: string;
 }
 
 @InputType()
-export class CouponsInquiry {
+export class CouponInquiry {
   @Field(() => Int)
   @Min(1)
   page: number;
@@ -111,4 +121,13 @@ export class UpdateCouponStatusInput {
   @IsEnum(CouponStatus)
   @Field(() => CouponStatus)
   couponStatus: CouponStatus;
+}
+
+@InputType()
+export class ValidateCouponInput {
+  @Field(() => String)
+  couponCode: string;
+
+  @Field(() => Float)
+  bookingAmount: number;
 }

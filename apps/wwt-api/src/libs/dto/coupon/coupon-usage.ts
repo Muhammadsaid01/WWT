@@ -1,5 +1,8 @@
 import { Field, Float, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
+import { Booking } from '../booking/booking';
+import { Member, TotalCounter } from '../member/member';
+import { Coupon } from './coupon';
 
 @ObjectType()
 export class CouponUsage {
@@ -23,4 +26,25 @@ export class CouponUsage {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  @Field(() => Date)
+  usedAt: Date;
+
+  @Field(() => Coupon, { nullable: true })
+  couponData?: Coupon;
+
+  @Field(() => Booking, { nullable: true })
+  bookingData?: Booking;
+
+  @Field(() => Member, { nullable: true })
+  memberData?: Member;
+}
+
+@ObjectType()
+export class CouponUsages {
+  @Field(() => [CouponUsage])
+  list: CouponUsage[];
+
+  @Field(() => [TotalCounter], { nullable: true })
+  metaCounter?: TotalCounter[];
 }

@@ -1,9 +1,21 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
-import { IsDateString, IsEnum, IsOptional, IsString, Length, Min } from 'class-validator';
-import { CouponType } from '../../enums/coupon.enum';
+import {
+  IsDateString,
+  IsEnum,
+  IsMongoId,
+  IsOptional,
+  IsString,
+  Length,
+  Min,
+} from 'class-validator';
+import { CouponStatus, CouponType } from '../../enums/coupon.enum';
 
 @InputType()
 export class CouponUpdate {
+  @IsMongoId()
+  @Field(() => String)
+  couponId: string;
+
   @IsOptional()
   @IsString()
   @Length(3, 100)
@@ -21,7 +33,7 @@ export class CouponUpdate {
   couponType?: CouponType;
 
   @IsOptional()
-  @Min(0)
+  @Min(0.01)
   @Field(() => Float, { nullable: true })
   couponValue?: number;
 
@@ -41,6 +53,11 @@ export class CouponUpdate {
   usageLimit?: number;
 
   @IsOptional()
+  @Min(1)
+  @Field(() => Int, { nullable: true })
+  perUserLimit?: number;
+
+  @IsOptional()
   @IsDateString()
   @Field(() => String, { nullable: true })
   validFrom?: string;
@@ -49,4 +66,9 @@ export class CouponUpdate {
   @IsDateString()
   @Field(() => String, { nullable: true })
   validUntil?: string;
+
+  @IsOptional()
+  @IsEnum(CouponStatus)
+  @Field(() => CouponStatus, { nullable: true })
+  couponStatus?: CouponStatus;
 }
