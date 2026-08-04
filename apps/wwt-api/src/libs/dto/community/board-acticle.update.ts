@@ -1,9 +1,14 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsEnum, IsOptional, IsString, Length } from 'class-validator';
-import { ArticleCategory } from '../../enums/community.enum';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { ObjectId } from 'mongoose';
+import { ArticleCategory, ArticleStatus } from '../../enums/community.enum';
 
 @InputType()
 export class BoardArticleUpdate {
+  @IsNotEmpty()
+  @Field(() => String)
+  _id: ObjectId;
+
   @IsOptional()
   @IsEnum(ArticleCategory)
   @Field(() => ArticleCategory, { nullable: true })
@@ -24,4 +29,9 @@ export class BoardArticleUpdate {
   @IsOptional()
   @Field(() => [String], { nullable: true })
   articleImages?: string[];
+
+  @IsOptional()
+  @IsEnum(ArticleStatus)
+  @Field(() => ArticleStatus, { nullable: true })
+  articleStatus?: ArticleStatus;
 }

@@ -16,7 +16,7 @@ import { AgentStatus } from '../../libs/enums/agent.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { ViewTargetType } from '../../libs/enums/community.enum';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
-import { T } from '../../libs/types/common';
+import { StatisticModifier, T } from '../../libs/types/common';
 import { AuthService } from '../auth/auth.service';
 import { ViewService } from '../view/view.service';
 
@@ -280,5 +280,23 @@ export class MemberService {
     }
 
     return member;
+  }
+
+  public async memberStatsEditor(input: StatisticModifier): Promise<Member> {
+    const { _id, targetKey, modifier } = input;
+    const result = await this.memberModel
+      .findByIdAndUpdate(
+        _id,
+        {
+          $inc: { [targetKey]: modifier },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!result) {
+      throw new InternalServerErrorException(Message.UPDATE_FAILED);
+    }
+
+    return result;
   }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import { ObjectId } from 'bson';
 
 export const availablePackageOptions = [
@@ -207,3 +208,10 @@ export const unwindReviewBooking = {
     preserveNullAndEmptyArrays: true,
   },
 };
+
+export const availableBoardArticleSorts = [
+  'createdAt',
+  'updatedAt',
+  'articleLikes',
+  'articleViews',
+];

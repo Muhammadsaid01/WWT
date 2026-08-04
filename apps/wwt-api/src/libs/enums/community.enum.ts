@@ -14,10 +14,14 @@ registerEnumType(ArticleCategory, {
 });
 export enum ArticleStatus {
   ACTIVE = 'ACTIVE',
+
+  DRAFT = 'DRAFT',
+
   HIDDEN = 'HIDDEN',
+
+  BLOCKED = 'BLOCKED',
   DELETED = 'DELETED',
 }
-
 registerEnumType(ArticleStatus, {
   name: 'ArticleStatus',
 });
