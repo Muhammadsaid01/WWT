@@ -14,7 +14,7 @@ class FISearch {
 }
 
 @InputType()
-export class FollowsInquiry {
+export class FollowInquiry {
   @IsNotEmpty()
   @Min(1)
   @Field(() => Int)
