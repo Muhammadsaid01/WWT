@@ -16,12 +16,24 @@ export class Like {
   @Field(() => LikeTargetType)
   targetType: LikeTargetType;
 
-  @Field(() => Date, { nullable: true })
-  likeDeletedAt?: Date;
-
   @Field(() => Date)
   createdAt: Date;
 
   @Field(() => Date)
   updatedAt: Date;
+}
+
+@ObjectType()
+export class MeLiked {
+  @Field(() => String)
+  memberId: ObjectId;
+
+  @Field(() => String)
+  targetId: ObjectId;
+
+  @Field(() => LikeTargetType)
+  targetType: LikeTargetType;
+
+  @Field(() => Boolean)
+  meLiked: boolean;
 }
