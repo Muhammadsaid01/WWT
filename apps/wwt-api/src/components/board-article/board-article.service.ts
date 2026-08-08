@@ -628,4 +628,18 @@ export class BoardArticleService {
 
     return deletedArticle;
   }
+
+  public async findActiveArticleById(articleId: ObjectId): Promise<BoardArticle> {
+    const article = await this.boardArticleModel.findOne({
+      _id: articleId,
+      articleStatus: ArticleStatus.ACTIVE,
+      articleDeletedAt: null,
+    });
+
+    if (!article) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    return article;
+  }
 }

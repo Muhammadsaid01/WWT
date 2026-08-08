@@ -1,9 +1,11 @@
 import { Field, Int, ObjectType } from '@nestjs/graphql';
-import type { ObjectId } from 'mongoose';
+import { ObjectId } from 'mongoose';
 import { CommentStatus } from '../../enums/community.enum';
+import { Member, TotalCounter } from '../member/member';
+import { BoardArticle } from './board-acticle';
 
 @ObjectType()
-export class Comment {
+export class CommentEntity {
   @Field(() => String)
   _id: ObjectId;
 
@@ -33,4 +35,18 @@ export class Comment {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  @Field(() => Member, { nullable: true })
+  memberData?: Member;
+
+  @Field(() => BoardArticle, { nullable: true })
+  articleData?: BoardArticle;
+}
+@ObjectType()
+export class Comments {
+  @Field(() => [CommentEntity])
+  list: CommentEntity[];
+
+  @Field(() => [TotalCounter], { nullable: true })
+  metaCounter?: TotalCounter[];
 }

@@ -215,3 +215,12 @@ export const availableBoardArticleSorts = [
   'articleLikes',
   'articleViews',
 ];
+
+export const lookupCommentArticle = {
+  $lookup: {
+    from: 'boardArticles',
+    localField: 'articleId',
+    foreignField: '_id',
+    as: 'articleData',
+  },
+};
