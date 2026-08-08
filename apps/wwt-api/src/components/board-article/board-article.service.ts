@@ -16,10 +16,12 @@ import {
   BoardArticlesInquiry,
 } from '../../libs/dto/community/board-acticle.input';
 import { BoardArticleUpdate } from '../../libs/dto/community/board-acticle.update';
+import { LikeInput } from '../../libs/dto/community/like.input';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Direction, Message } from '../../libs/enums/common.enum';
-import { ArticleStatus, ViewTargetType } from '../../libs/enums/community.enum';
+import { ArticleStatus, LikeTargetType, ViewTargetType } from '../../libs/enums/community.enum';
 import { StatisticModifier } from '../../libs/types/common';
+import { LikesService } from '../likes/likes.service';
 import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 
@@ -29,6 +31,7 @@ export class BoardArticleService {
     @InjectModel('BoardArticle') private readonly boardArticleModel: Model<BoardArticle>,
     private memberService: MemberService,
     private viewService: ViewService,
+    private likeService: LikesService,
   ) {}
 
   public async createBoardArticle(
@@ -100,6 +103,43 @@ export class BoardArticleService {
     );
 
     return targetBoardArticle;
+  }
+
+  public async likeTargetBoardArticle(
+    memberId: ObjectId,
+    targetId: ObjectId,
+  ): Promise<BoardArticle> {
+    const target = await this.boardArticleModel
+      .findOne({
+        _id: targetId,
+        articleStatus: ArticleStatus.ACTIVE,
+        articleDeletedAt: null,
+      })
+      .exec();
+
+    if (!target) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const input: LikeInput = {
+      memberId,
+      targetId,
+      targetType: LikeTargetType.ARTICLE,
+    };
+
+    const modifier = await this.likeService.toggleLike(input);
+
+    const result = await this.boardArticleStatsEditor({
+      _id: targetId,
+      targetKey: 'articleLikeCount',
+      modifier,
+    });
+
+    if (!result) {
+      throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
+    return result;
   }
 
   public async updateBoardArticle(
