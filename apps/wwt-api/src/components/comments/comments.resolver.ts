@@ -78,29 +78,6 @@ export class CommentsResolver {
     return this.commentService.deleteComment(memberId, shapeIntoMongoObjectId(commentId));
   }
 
-  //   // ADMIN
-
-  //   @Roles(MemberType.ADMIN)
-  //   @UseGuards(RolesGuard)
-  //   @Query(() => Comments)
-  //   public async getAllCommentsByAdmin(@Args('input') input: CommentsInquiry): Promise<Comments> {
-  //     console.log('Query: getAllCommentsByAdmin');
-
-  //     return this.commentService.getAllCommentsByAdmin(input);
-  //   }
-
-  //   @Roles(MemberType.ADMIN)
-  //   @UseGuards(RolesGuard)
-  //   @Query(() => Comment)
-  //   public async getCommentByAdmin(
-  //     @Args('commentId', { type: () => String })
-  //     commentId: string,
-  //   ): Promise<Comment> {
-  //     console.log('Query: getCommentByAdmin');
-
-  //     return this.commentService.getCommentByAdmin(shapeIntoMongoObjectId(commentId));
-  //   }
-
   @Roles(MemberType.ADMIN)
   @UseGuards(RolesGuard)
   @Mutation(() => CommentEntity)
