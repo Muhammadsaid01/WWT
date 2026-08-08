@@ -30,7 +30,7 @@ export class ReviewResolver {
     return this.reviewService.createReview(targetMemberId, input);
   }
 
-  @UseGuards(WithoutGuard)
+  @UseGuards(AuthGuard)
   @Query(() => Reviews)
   public async getPackageReviews(
     @Args('packageId', { type: () => String })
@@ -46,8 +46,7 @@ export class ReviewResolver {
     return this.reviewService.getPackageReviews(targetPackageId, input);
   }
 
-  @UseGuards(AuthGuard)
-  @UseGuards(RolesGuard)
+  @UseGuards(WithoutGuard)
   @Query(() => Review)
   public async getReview(
     @AuthMember('_id') memberId: ObjectId,

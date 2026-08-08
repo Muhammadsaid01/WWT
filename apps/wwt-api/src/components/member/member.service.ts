@@ -94,6 +94,13 @@ export class MemberService {
           .exec();
         targetMember.memberViewCount++; // Increment the view count in the targetMember object
       }
+      const likeInput: LikeInput = {
+        memberId,
+        targetId,
+        targetType: LikeTargetType.MEMBER,
+      };
+
+      targetMember.meLiked = await this.likeService.checkLikeExistence(likeInput);
     }
     return targetMember;
   }

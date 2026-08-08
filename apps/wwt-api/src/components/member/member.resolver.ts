@@ -73,7 +73,7 @@ export class MemberResolver {
     return this.memberService.updateMember(memberId, input);
   }
 
-  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(AuthGuard)
   @UseGuards(RolesGuard)
   @Query(() => Member)
   public async getMyProfile(@AuthMember('_id') memberId: ObjectId): Promise<Member> {

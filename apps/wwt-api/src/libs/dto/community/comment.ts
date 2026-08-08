@@ -3,6 +3,7 @@ import { ObjectId } from 'mongoose';
 import { CommentStatus } from '../../enums/community.enum';
 import { Member, TotalCounter } from '../member/member';
 import { BoardArticle } from './board-acticle';
+import { MeLiked } from './like';
 
 @ObjectType()
 export class CommentEntity {
@@ -41,6 +42,9 @@ export class CommentEntity {
 
   @Field(() => BoardArticle, { nullable: true })
   articleData?: BoardArticle;
+
+  @Field(() => [MeLiked], { nullable: true })
+  meLiked?: MeLiked[];
 }
 @ObjectType()
 export class Comments {

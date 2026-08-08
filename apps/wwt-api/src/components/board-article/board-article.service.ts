@@ -91,10 +91,13 @@ export class BoardArticleService {
         targetBoardArticle.articleViewCount++;
       }
 
-      // TODO:
-      // Like module tugagach qo'shiladi
-      // targetBoardArticle.meLiked =
-      //   await this.likeService.checkLikeExistence(...)
+      const likeInput: LikeInput = {
+        memberId,
+        targetId: articleId,
+        targetType: LikeTargetType.ARTICLE,
+      };
+
+      targetBoardArticle.meLiked = await this.likeService.checkLikeExistence(likeInput);
     }
 
     targetBoardArticle.memberData = await this.memberService.getMember(

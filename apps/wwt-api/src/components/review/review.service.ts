@@ -137,7 +137,6 @@ export class ReviewService {
       {
         $match: {
           _id: reviewId,
-          memberId,
           reviewDeletedAt: null,
         },
       },
@@ -153,7 +152,17 @@ export class ReviewService {
       throw new BadRequestException(Message.NO_DATA_FOUND);
     }
 
-    return result[0];
+    const targetReview = result[0];
+
+    const likeInput: LikeInput = {
+      memberId,
+      targetId: reviewId,
+      targetType: LikeTargetType.REVIEW,
+    };
+
+    targetReview.meLiked = await this.likeService.checkLikeExistence(likeInput);
+
+    return targetReview;
   }
 
   public async likeTargetReview(memberId: ObjectId, targetId: ObjectId): Promise<Review> {

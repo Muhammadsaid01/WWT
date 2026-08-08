@@ -269,9 +269,14 @@ export class TravelPackageService {
         });
 
         targetPackage.packageViewCount = (targetPackage.packageViewCount ?? 0) + 1;
-      }
+        const likeInput: LikeInput = {
+          memberId,
+          targetId: packageId,
+          targetType: LikeTargetType.PACKAGE,
+        };
 
-      // TODO: meLiked
+        targetPackage.meLiked = await this.likeService.checkLikeExistence(likeInput);
+      }
     }
 
     const agent = await this.agentService.findAgentById(targetPackage.agentId);

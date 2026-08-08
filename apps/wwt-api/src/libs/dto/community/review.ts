@@ -4,6 +4,7 @@ import { ReviewStatus } from '../../enums/community.enum';
 import { Booking } from '../booking/booking';
 import { Member, TotalCounter } from '../member/member';
 import { TravelPackage } from '../travel-package/travel-package';
+import { MeLiked } from './like';
 
 @ObjectType()
 export class Review {
@@ -57,6 +58,9 @@ export class Review {
 
   @Field(() => Booking, { nullable: true })
   bookingData?: Booking;
+
+  @Field(() => [MeLiked], { nullable: true })
+  meLiked?: MeLiked[];
 }
 
 @ObjectType()

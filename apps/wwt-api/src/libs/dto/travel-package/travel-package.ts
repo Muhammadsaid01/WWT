@@ -8,6 +8,7 @@ import {
   TransportType,
 } from '../../enums/package.enum';
 import { Agent } from '../agent/agent';
+import { MeLiked } from '../community/like';
 import { TotalCounter } from '../member/member';
 
 @ObjectType()
@@ -111,6 +112,8 @@ export class TravelPackage {
   /** from aggregation **/
   @Field(() => Agent, { nullable: true })
   agentData?: Agent;
+  @Field(() => [MeLiked], { nullable: true })
+  meLiked?: MeLiked[];
 }
 @ObjectType()
 export class TravelPackages {

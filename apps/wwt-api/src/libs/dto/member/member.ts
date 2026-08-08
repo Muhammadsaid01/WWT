@@ -8,6 +8,7 @@ import {
   MemberType,
 } from '../../enums/member.enum';
 import { AgentProfileData } from '../agent/agent';
+import { MeLiked } from '../community/like';
 
 @ObjectType()
 export class Member {
@@ -99,6 +100,11 @@ export class Member {
 
   @Field(() => AgentProfileData, { nullable: true })
   agentData?: AgentProfileData;
+
+  /** from aggregation */
+
+  @Field(() => [MeLiked], { nullable: true })
+  meLiked?: MeLiked[];
 }
 
 @ObjectType()

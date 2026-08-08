@@ -131,7 +131,7 @@ export class CommentsService {
     };
   }
 
-  public async getComment(commentId: ObjectId): Promise<CommentEntity> {
+  public async getComment(memberId: ObjectId | null, commentId: ObjectId): Promise<CommentEntity> {
     const result = await this.commentModel.aggregate([
       {
         $match: {
@@ -154,7 +154,21 @@ export class CommentsService {
       throw new BadRequestException(Message.NO_DATA_FOUND);
     }
 
-    return result[0];
+    const targetComment = result[0];
+
+    if (memberId) {
+      const likeInput: LikeInput = {
+        memberId,
+        targetId: commentId,
+        targetType: LikeTargetType.COMMENT,
+      };
+
+      targetComment.meLiked = await this.likeService.checkLikeExistence(likeInput);
+    } else {
+      targetComment.meLiked = [];
+    }
+
+    return targetComment;
   }
 
   public async likeTargetComment(memberId: ObjectId, targetId: ObjectId): Promise<CommentEntity> {

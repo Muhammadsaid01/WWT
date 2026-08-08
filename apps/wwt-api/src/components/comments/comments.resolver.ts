@@ -48,12 +48,11 @@ export class CommentsResolver {
   public async getComment(
     @Args('commentId', { type: () => String })
     commentId: string,
+    @AuthMember('_id') memberId?: ObjectId,
   ): Promise<CommentEntity> {
     console.log('Query: getComment');
 
-    const targetCommentId = shapeIntoMongoObjectId(commentId);
-
-    return this.commentService.getComment(targetCommentId);
+    return this.commentService.getComment(memberId ?? null, shapeIntoMongoObjectId(commentId));
   }
 
   @UseGuards(AuthGuard)
