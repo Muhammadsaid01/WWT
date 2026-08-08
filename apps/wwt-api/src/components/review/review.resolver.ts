@@ -7,6 +7,7 @@ import { ReviewInput, ReviewsInquiry } from '../../libs/dto/community/review.inp
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { WithoutGuard } from '../auth/guards/without.guard';
 import { ReviewService } from './review.service';
@@ -15,7 +16,7 @@ import { ReviewService } from './review.service';
 export class ReviewResolver {
   constructor(private readonly reviewService: ReviewService) {}
 
-  @Roles(MemberType.USER)
+  @UseGuards(AuthGuard)
   @UseGuards(RolesGuard)
   @Mutation(() => Review)
   public async createReview(
@@ -45,7 +46,7 @@ export class ReviewResolver {
     return this.reviewService.getPackageReviews(targetPackageId, input);
   }
 
-  @Roles(MemberType.USER)
+  @UseGuards(AuthGuard)
   @UseGuards(RolesGuard)
   @Query(() => Review)
   public async getReview(
@@ -62,7 +63,21 @@ export class ReviewResolver {
     return this.reviewService.getReview(targetMemberId, targetReviewId);
   }
 
-  @Roles(MemberType.USER)
+  @UseGuards(AuthGuard)
+  @Mutation(() => Review)
+  public async likeTargetReview(
+    @Args('reviewId', { type: () => String })
+    reviewId: string,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<Review> {
+    console.log('Mutation: likeTargetReview');
+
+    const targetReviewId = shapeIntoMongoObjectId(reviewId);
+
+    return this.reviewService.likeTargetReview(memberId, targetReviewId);
+  }
+
+  @UseGuards(AuthGuard)
   @UseGuards(RolesGuard)
   @Query(() => Reviews)
   public async getMyReviews(
@@ -76,7 +91,7 @@ export class ReviewResolver {
     return this.reviewService.getMyReviews(targetMemberId, input);
   }
 
-  @Roles(MemberType.USER)
+  @UseGuards(AuthGuard)
   @UseGuards(RolesGuard)
   @Mutation(() => Review)
   public async deleteReview(

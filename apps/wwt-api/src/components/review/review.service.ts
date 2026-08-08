@@ -11,13 +11,16 @@ import {
   unwindReviewMember,
   unwindReviewPackage,
 } from '../../libs/config';
+import { LikeInput } from '../../libs/dto/community/like.input';
 import { Review, Reviews } from '../../libs/dto/community/review';
 import { ReviewInput, ReviewsInquiry } from '../../libs/dto/community/review.input';
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { BookingStatus } from '../../libs/enums/booking.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
+import { LikeTargetType } from '../../libs/enums/community.enum';
 import { PackageStatus } from '../../libs/enums/package.enum';
 import { BookingService } from '../booking/booking.service';
+import { LikesService } from '../likes/likes.service';
 
 @Injectable()
 export class ReviewService {
@@ -29,6 +32,8 @@ export class ReviewService {
     private readonly packageModel: Model<TravelPackage>,
 
     private readonly bookingService: BookingService,
+
+    private readonly likeService: LikesService,
   ) {}
 
   public async createReview(memberId: ObjectId, input: ReviewInput): Promise<Review> {
@@ -149,6 +154,39 @@ export class ReviewService {
     }
 
     return result[0];
+  }
+
+  public async likeTargetReview(memberId: ObjectId, targetId: ObjectId): Promise<Review> {
+    const target = await this.reviewModel
+      .findOne({
+        _id: targetId,
+        reviewDeletedAt: null,
+      })
+      .exec();
+
+    if (!target) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const input: LikeInput = {
+      memberId,
+      targetId,
+      targetType: LikeTargetType.REVIEW,
+    };
+
+    const modifier = await this.likeService.toggleLike(input);
+
+    const result = await this.reviewStatsEditor({
+      _id: targetId,
+      targetKey: 'reviewLikes',
+      modifier,
+    });
+
+    if (!result) {
+      throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
+    return result;
   }
 
   public async getMyReviews(memberId: ObjectId, input: ReviewsInquiry): Promise<Reviews> {
@@ -435,5 +473,29 @@ export class ReviewService {
     if (!updatedPackage) {
       throw new BadRequestException(Message.UPDATE_FAILED);
     }
+  }
+
+  public async reviewStatsEditor(input: {
+    _id: ObjectId;
+    targetKey: string;
+    modifier: number;
+  }): Promise<Review> {
+    const result = await this.reviewModel.findByIdAndUpdate(
+      input._id,
+      {
+        $inc: {
+          [input.targetKey]: input.modifier,
+        },
+      },
+      {
+        new: true,
+      },
+    );
+
+    if (!result) {
+      throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
+    return result;
   }
 }
