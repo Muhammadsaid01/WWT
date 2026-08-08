@@ -8,6 +8,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
 import { Agent } from '../../libs/dto/agent/agent';
+import { Follower, Following, MeFollowed } from '../../libs/dto/community/follow';
 import { LikeInput } from '../../libs/dto/community/like.input';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Member, Members } from '../../libs/dto/member/member';
@@ -28,6 +29,7 @@ export class MemberService {
     @InjectModel('Member') private readonly memberModel: Model<Member>,
 
     @InjectModel('Agent') private readonly agentModel: Model<Agent>,
+    @InjectModel('Follow') private readonly followModel: Model<Follower | Following>,
     private authService: AuthService,
     private viewService: ViewService,
     private likeService: LikesService,
@@ -101,8 +103,19 @@ export class MemberService {
       };
 
       targetMember.meLiked = await this.likeService.checkLikeExistence(likeInput);
+      targetMember.meFollowed = await this.checkSubscription(memberId, targetId);
     }
     return targetMember;
+  }
+
+  private async checkSubscription(
+    followerId: ObjectId,
+    followingId: ObjectId,
+  ): Promise<MeFollowed[]> {
+    const result = await this.followModel
+      .findOne({ followingId: followingId, followerId: followerId })
+      .exec();
+    return result ? [{ followerId: followerId, followingId: followingId, myFollowing: true }] : [];
   }
 
   public async getMyProfile(memberId: ObjectId): Promise<Member> {

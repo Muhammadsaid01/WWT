@@ -8,6 +8,7 @@ import {
   MemberType,
 } from '../../enums/member.enum';
 import { AgentProfileData } from '../agent/agent';
+import { MeFollowed } from '../community/follow';
 import { MeLiked } from '../community/like';
 
 @ObjectType()
@@ -105,6 +106,8 @@ export class Member {
 
   @Field(() => [MeLiked], { nullable: true })
   meLiked?: MeLiked[];
+  @Field(() => [MeFollowed], { nullable: true })
+  meFollowed?: MeFollowed[];
 }
 
 @ObjectType()
