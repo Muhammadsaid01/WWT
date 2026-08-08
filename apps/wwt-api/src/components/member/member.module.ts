@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import AgentSchema from '../../schemas/accounts/Agent.schema';
 import MemberSchema from '../../schemas/accounts/Member.schema';
 import { AuthModule } from '../auth/auth.module';
+import { LikesModule } from '../likes/likes.module';
 import { ViewModule } from '../view/view.module';
 import { MemberResolver } from './member.resolver';
 import { MemberService } from './member.service';
@@ -15,6 +16,7 @@ import { MemberService } from './member.service';
     ]),
     AuthModule,
     ViewModule,
+    LikesModule,
   ],
   providers: [MemberResolver, MemberService],
   exports: [MemberService],

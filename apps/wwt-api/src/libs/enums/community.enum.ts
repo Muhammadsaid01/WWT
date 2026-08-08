@@ -45,6 +45,7 @@ export enum LikeTargetType {
   ARTICLE = 'ARTICLE',
   COMMENT = 'COMMENT',
   REVIEW = 'REVIEW',
+  MEMBER = 'MEMBER',
 }
 
 registerEnumType(LikeTargetType, {

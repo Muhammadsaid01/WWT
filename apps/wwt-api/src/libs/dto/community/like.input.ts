@@ -11,7 +11,7 @@ export class LikeInput {
 
   @IsNotEmpty()
   @Field(() => String)
-  targetId: string;
+  targetId: ObjectId;
 
   @IsNotEmpty()
   @IsEnum(LikeTargetType)

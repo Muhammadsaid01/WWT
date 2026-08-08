@@ -8,16 +8,18 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
 import { Agent } from '../../libs/dto/agent/agent';
+import { LikeInput } from '../../libs/dto/community/like.input';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Member, Members } from '../../libs/dto/member/member';
 import { LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
 import { MemberUpdate, MemberUpdateByAdmin } from '../../libs/dto/member/member.update';
 import { AgentStatus } from '../../libs/enums/agent.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
-import { ViewTargetType } from '../../libs/enums/community.enum';
+import { LikeTargetType, ViewTargetType } from '../../libs/enums/community.enum';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { AuthService } from '../auth/auth.service';
+import { LikesService } from '../likes/likes.service';
 import { ViewService } from '../view/view.service';
 
 @Injectable()
@@ -28,6 +30,7 @@ export class MemberService {
     @InjectModel('Agent') private readonly agentModel: Model<Agent>,
     private authService: AuthService,
     private viewService: ViewService,
+    private likeService: LikesService,
   ) {}
 
   public async signup(input: MemberInput): Promise<Member> {
@@ -142,6 +145,45 @@ export class MemberService {
     }
 
     result.accessToken = await this.authService.createToken(result);
+    return result;
+  }
+
+  public async likeTargetMember(memberId: ObjectId, targetId: ObjectId): Promise<Member> {
+    // O'zini o'zi like qilishni bloklaymiz
+    if (memberId.toString() === targetId.toString()) {
+      throw new BadRequestException('You cannot like yourself.');
+    }
+
+    const target = await this.memberModel
+      .findOne({
+        _id: targetId,
+        memberStatus: MemberStatus.ACTIVE,
+        memberDeletedAt: null,
+      })
+      .exec();
+
+    if (!target) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const input: LikeInput = {
+      memberId,
+      targetId,
+      targetType: LikeTargetType.MEMBER,
+    };
+
+    const modifier = await this.likeService.toggleLike(input);
+
+    const result = await this.memberStatsEditor({
+      _id: targetId,
+      targetKey: 'memberLikeCount',
+      modifier,
+    });
+
+    if (!result) {
+      throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
     return result;
   }
 

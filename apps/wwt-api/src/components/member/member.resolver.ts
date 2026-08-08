@@ -91,6 +91,19 @@ export class MemberResolver {
     return this.memberService.deleteMember(memberId);
   }
 
+  @UseGuards(AuthGuard)
+  @Mutation(() => Member)
+  public async likeTargetMember(
+    @Args('memberId', { type: () => String })
+    targetMemberId: string,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<Member> {
+    console.log('Mutation: likeTargetMember');
+
+    const targetId = shapeIntoMongoObjectId(targetMemberId);
+    return this.memberService.likeTargetMember(memberId, targetId);
+  }
+
   //** ADMIN **/
 
   // AUTHORIZED: Admin
