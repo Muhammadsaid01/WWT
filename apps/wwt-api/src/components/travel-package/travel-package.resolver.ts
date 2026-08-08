@@ -52,6 +52,7 @@ import {
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { WithoutGuard } from '../auth/guards/without.guard';
 import { TravelPackageService } from './travel-package.service';
@@ -119,6 +120,20 @@ export class TravelPackageResolver {
     console.log('Mutation: getTravelPackage!');
     const packageId = shapeIntoMongoObjectId(input);
     return this.travelService.getTravelPackage(memberId, packageId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Mutation(() => TravelPackage)
+  public async likeTargetPackage(
+    @Args('packageId', { type: () => String })
+    packageId: string,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackage> {
+    console.log('Mutation: likeTargetPackage');
+
+    const targetPackageId = shapeIntoMongoObjectId(packageId);
+
+    return this.travelService.likeTargetPackage(memberId, targetPackageId);
   }
 
   @UseGuards(WithoutGuard)

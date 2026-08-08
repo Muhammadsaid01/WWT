@@ -9,6 +9,7 @@ import PackageScheduleSchema from '../../schemas/travel/PackageSchedule.schema';
 import PackageTagSchema from '../../schemas/travel/PackageTag.schema';
 import { AgentModule } from '../agent/agent.module';
 import { AuthModule } from '../auth/auth.module';
+import { LikesModule } from '../likes/likes.module';
 import { MemberModule } from '../member/member.module';
 import { ViewModule } from '../view/view.module';
 import { TravelPackageResolver } from './travel-package.resolver';
@@ -29,6 +30,7 @@ import { TravelPackageService } from './travel-package.service';
     ViewModule,
     MemberModule,
     AgentModule,
+    LikesModule,
   ],
   providers: [TravelPackageResolver, TravelPackageService],
   exports: [TravelPackageService],

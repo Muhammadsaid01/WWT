@@ -10,6 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import moment from 'moment';
 import { FilterQuery, Model, ObjectId } from 'mongoose';
 import { lookupAgent, unwindAgent } from '../../libs/config';
+import { LikeInput } from '../../libs/dto/community/like.input';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Itinerary } from '../../libs/dto/travel-package/itinerary';
 import {
@@ -58,10 +59,11 @@ import {
   TravelPackageUpdate,
 } from '../../libs/dto/travel-package/travel-package.update';
 import { Direction, Message } from '../../libs/enums/common.enum';
-import { ViewTargetType } from '../../libs/enums/community.enum';
+import { LikeTargetType, ViewTargetType } from '../../libs/enums/community.enum';
 import { PackageStatus, ScheduleStatus } from '../../libs/enums/package.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { AgentService } from '../agent/agent.service';
+import { LikesService } from '../likes/likes.service';
 import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 
@@ -91,6 +93,7 @@ export class TravelPackageService {
     private readonly agentService: AgentService,
     private readonly memberService: MemberService,
     private readonly viewService: ViewService,
+    private readonly likeService: LikesService,
   ) {}
 
   public async createTravelPackage(
@@ -278,6 +281,40 @@ export class TravelPackageService {
     targetPackage.agentData = agent;
 
     return targetPackage;
+  }
+
+  public async likeTargetPackage(memberId: ObjectId, targetId: ObjectId): Promise<TravelPackage> {
+    const target = await this.packageModel
+      .findOne({
+        _id: targetId,
+        packageStatus: PackageStatus.ACTIVE,
+        packageDeletedAt: null,
+      })
+      .exec();
+
+    if (!target) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const input: LikeInput = {
+      memberId,
+      targetId,
+      targetType: LikeTargetType.PACKAGE,
+    };
+
+    const modifier = await this.likeService.toggleLike(input);
+
+    const result = await this.packageStatsEditor({
+      _id: targetId,
+      targetKey: 'packageLikeCount',
+      modifier,
+    });
+
+    if (!result) {
+      throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
+    return result;
   }
 
   public async getTravelPackages(
