@@ -3,13 +3,6 @@ import { IsNotEmpty, IsOptional, Min } from 'class-validator';
 import { Direction } from '../../enums/common.enum';
 
 @InputType()
-export class FollowInput {
-  @IsNotEmpty()
-  @Field(() => String)
-  followingId: string;
-}
-
-@InputType()
 class FISearch {
   @IsOptional()
   @Field(() => String, { nullable: true })
