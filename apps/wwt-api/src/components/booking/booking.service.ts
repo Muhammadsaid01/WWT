@@ -31,9 +31,11 @@ import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule'
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { BookingStatus } from '../../libs/enums/booking.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { PackageStatus, ScheduleStatus } from '../../libs/enums/package.enum';
 import { AgentService } from '../agent/agent.service';
 import { CouponService } from '../coupon/coupon.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class BookingService {
@@ -51,6 +53,7 @@ export class BookingService {
     private readonly packageScheduleModel: Model<PackageSchedule>,
     private agentService: AgentService,
     private readonly couponService: CouponService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async createBooking(memberId: ObjectId, input: BookingInput): Promise<Booking> {
@@ -230,6 +233,19 @@ export class BookingService {
         },
       );
 
+      /*
+       * 13. Agentga notification yuboramiz
+       */
+      await this.notificationService.createNotification({
+        receiverId: targetPackage.agentId,
+        senderId: memberId,
+        notificationType: NotificationType.BOOKING_CREATED,
+        notificationTitle: 'New booking',
+        notificationMessage: 'A new booking has been created.',
+        referenceType: NotificationReferenceType.BOOKING,
+        referenceId: createdBooking._id,
+      });
+
       return createdBooking;
     } catch (error) {
       console.log('Error, Service createBooking:', error);
@@ -265,11 +281,27 @@ export class BookingService {
     }
 
     targetBooking.bookingStatus = BookingStatus.CANCELLED;
+
     targetBooking.cancelledAt = new Date();
 
-    await targetBooking.save();
+    const updatedBooking = await targetBooking.save();
 
-    return targetBooking;
+    await this.notificationService.createNotification({
+      receiverId: updatedBooking.agentId,
+      senderId: memberId,
+
+      notificationType: NotificationType.BOOKING_CANCELLED,
+
+      notificationTitle: 'Booking cancelled',
+
+      notificationMessage: 'A customer has cancelled a booking.',
+
+      referenceType: NotificationReferenceType.BOOKING,
+
+      referenceId: updatedBooking._id,
+    });
+
+    return updatedBooking;
   }
 
   public async getMyBookings(memberId: ObjectId, input: BookingsInquiry): Promise<Bookings> {
@@ -387,9 +419,7 @@ export class BookingService {
       [BookingStatus.CONFIRMED]: [BookingStatus.COMPLETED],
 
       [BookingStatus.CANCELLED]: [],
-
       [BookingStatus.COMPLETED]: [],
-
       [BookingStatus.REJECTED]: [],
     };
 
@@ -405,7 +435,43 @@ export class BookingService {
 
     targetBooking.bookingStatus = bookingStatus;
 
-    return await targetBooking.save();
+    const updatedBooking = await targetBooking.save();
+
+    if (bookingStatus === BookingStatus.CONFIRMED) {
+      await this.notificationService.createNotification({
+        receiverId: updatedBooking.memberId,
+        senderId: updatedBooking.agentId,
+
+        notificationType: NotificationType.BOOKING_CONFIRMED,
+
+        notificationTitle: 'Booking confirmed',
+
+        notificationMessage: 'Your booking has been confirmed.',
+
+        referenceType: NotificationReferenceType.BOOKING,
+
+        referenceId: updatedBooking._id,
+      });
+    }
+
+    if (bookingStatus === BookingStatus.REJECTED) {
+      await this.notificationService.createNotification({
+        receiverId: updatedBooking.memberId,
+        senderId: updatedBooking.agentId,
+
+        notificationType: NotificationType.BOOKING_CANCELLED,
+
+        notificationTitle: 'Booking rejected',
+
+        notificationMessage: 'Your booking has been rejected.',
+
+        referenceType: NotificationReferenceType.BOOKING,
+
+        referenceId: updatedBooking._id,
+      });
+    }
+
+    return updatedBooking;
   }
 
   public async getAllBookingsByAdmin(input: BookingsInquiry): Promise<Bookings> {
@@ -474,7 +540,43 @@ export class BookingService {
       targetBooking.cancelledAt = null;
     }
 
-    return await targetBooking.save();
+    const updatedBooking = await targetBooking.save();
+
+    if (bookingStatus === BookingStatus.CONFIRMED) {
+      await this.notificationService.createNotification({
+        receiverId: updatedBooking.memberId,
+        senderId: null,
+
+        notificationType: NotificationType.BOOKING_CONFIRMED,
+
+        notificationTitle: 'Booking confirmed',
+
+        notificationMessage: 'Your booking has been confirmed by the administrator.',
+
+        referenceType: NotificationReferenceType.BOOKING,
+
+        referenceId: updatedBooking._id,
+      });
+    }
+
+    if (bookingStatus === BookingStatus.CANCELLED) {
+      await this.notificationService.createNotification({
+        receiverId: updatedBooking.memberId,
+        senderId: null,
+
+        notificationType: NotificationType.BOOKING_CANCELLED,
+
+        notificationTitle: 'Booking cancelled',
+
+        notificationMessage: 'Your booking has been cancelled by the administrator.',
+
+        referenceType: NotificationReferenceType.BOOKING,
+
+        referenceId: updatedBooking._id,
+      });
+    }
+
+    return updatedBooking;
   }
 
   public async deleteBookingByAdmin(bookingId: ObjectId): Promise<Booking> {

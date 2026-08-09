@@ -11,6 +11,7 @@ import PackageScheduleSchema from '../../schemas/travel/PackageSchedule.schema';
 import { AgentModule } from '../agent/agent.module';
 import { AuthModule } from '../auth/auth.module';
 import { CouponModule } from '../coupon/coupon.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { CouponModule } from '../coupon/coupon.module';
     AuthModule,
     AgentModule,
     CouponModule,
+    NotificationModule,
   ],
   providers: [BookingResolver, BookingService],
   exports: [BookingService],
