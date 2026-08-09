@@ -81,6 +81,7 @@ export enum ViewTargetType {
   MEMBER = 'MEMBER',
   PACKAGE = 'PACKAGE',
   ARTICLE = 'ARTICLE',
+  TRAVEL_MATE_POST = 'TRAVEL_MATE_POST',
 }
 
 registerEnumType(ViewTargetType, {

@@ -22,6 +22,7 @@ import { ReviewModule } from './review/review.module';
 import { TravelerModule } from './traveler/traveler.module';
 import { ViewModule } from './view/view.module';
 import { CouponModule } from './coupon/coupon.module';
+import { TravelMatePostModule } from './travel-mate-post/travel-mate-post.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { CouponModule } from './coupon/coupon.module';
     FaqModule,
     AgentRequestModule,
     CouponModule,
+    TravelMatePostModule,
   ],
 })
 export class ComponentsModule {}

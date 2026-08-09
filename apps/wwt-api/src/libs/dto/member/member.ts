@@ -86,6 +86,11 @@ export class Member {
 
   @Field(() => Int)
   memberFollowingCount: number;
+  @Field(() => Int)
+  memberTravelMatePosts: number;
+
+  @Field(() => Boolean)
+  memberOnline: boolean;
 
   @Field(() => Date, { nullable: true })
   memberDeletedAt?: Date;

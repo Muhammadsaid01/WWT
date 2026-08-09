@@ -144,6 +144,10 @@ const MemberSchema = new Schema(
       type: Number,
       default: 0,
     },
+    memberTravelMatePosts: {
+      type: Number,
+      default: 0,
+    },
 
     memberOnline: {
       type: Boolean,

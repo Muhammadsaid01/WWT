@@ -70,6 +70,11 @@ const TravelMatePostSchema = new Schema(
       default: TravelMatePostStatus.ACTIVE,
     },
 
+    matePostViewCount: {
+      type: Number,
+      default: 0,
+    },
+
     matePostDeletedAt: {
       type: Date,
     },

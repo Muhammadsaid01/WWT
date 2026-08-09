@@ -1,7 +1,7 @@
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
 import { TravelMatePostStatus } from '../../enums/community.enum';
-import { TotalCounter } from '../member/member';
+import { Member, TotalCounter } from '../member/member';
 
 @ObjectType()
 export class TravelMatePost {
@@ -49,6 +49,13 @@ export class TravelMatePost {
 
   @Field(() => Date)
   updatedAt: Date;
+
+  @Field(() => Int, { nullable: true })
+  matePostViewCount?: number;
+
+  /** from aggregation */
+  @Field(() => Member, { nullable: true })
+  memberData?: Member;
 }
 
 @ObjectType()

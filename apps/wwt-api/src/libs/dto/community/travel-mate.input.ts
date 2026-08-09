@@ -1,14 +1,6 @@
 /* eslint-disable prettier/prettier */
 import { Field, InputType, Int } from '@nestjs/graphql';
-import {
-  IsDateString,
-  IsEnum,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  Length,
-  Min,
-} from 'class-validator';
+import { IsDate, IsEnum, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
 import { Direction } from '../../enums/common.enum';
 import { TravelMatePostStatus } from '../../enums/community.enum';
 
@@ -35,9 +27,9 @@ export class TravelMatePostInput {
   destinationCity: string;
 
   @IsNotEmpty()
-  @IsDateString()
-  @Field(() => String)
-  travelDate: string;
+  @IsDate()
+  @Field(() => Date)
+  travelDate: Date;
 
   @IsNotEmpty()
   @Min(2)

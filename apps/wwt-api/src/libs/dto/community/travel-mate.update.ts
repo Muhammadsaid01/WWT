@@ -1,8 +1,12 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsDateString, IsOptional, IsString, Length, Min } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
 
 @InputType()
 export class TravelMatePostUpdate {
+  @IsNotEmpty()
+  @Field(() => String)
+  _id: string;
+
   @IsOptional()
   @IsString()
   @Field(() => String, { nullable: true })

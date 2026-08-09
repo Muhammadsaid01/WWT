@@ -241,3 +241,19 @@ export const lookupFollowerData = {
     as: 'followerData',
   },
 };
+
+export const lookupTravelMateMember = {
+  $lookup: {
+    from: 'members',
+    localField: 'memberId',
+    foreignField: '_id',
+    as: 'memberData',
+  },
+};
+
+export const unwindTravelMateMember = {
+  $unwind: {
+    path: '$memberData',
+    preserveNullAndEmptyArrays: true,
+  },
+};
