@@ -7,9 +7,11 @@ import { Payment } from '../../libs/dto/booking/payment';
 import { PaymentInput } from '../../libs/dto/booking/payment.input';
 import { BookingStatus } from '../../libs/enums/booking.enum';
 import { Message } from '../../libs/enums/common.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { PaymentStatus } from '../../libs/enums/payment.enum';
 import { AgentService } from '../agent/agent.service';
 import { BookingService } from '../booking/booking.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class PaymentService {
@@ -20,6 +22,7 @@ export class PaymentService {
     private readonly bookingService: BookingService,
 
     private readonly agentService: AgentService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async createPayment(memberId: ObjectId, input: PaymentInput): Promise<Payment> {
@@ -243,6 +246,42 @@ export class PaymentService {
 
     if (!updatedPayment) {
       throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
+    if (paymentStatus === PaymentStatus.PAID) {
+      await this.notificationService.createNotification({
+        receiverId: updatedPayment.memberId,
+        senderId: null,
+        notificationType: NotificationType.PAYMENT_SUCCESS,
+        notificationTitle: 'Payment successful',
+        notificationMessage: 'Your payment has been completed successfully.',
+        referenceType: NotificationReferenceType.PAYMENT,
+        referenceId: updatedPayment._id,
+      });
+    }
+
+    if (paymentStatus === PaymentStatus.FAILED) {
+      await this.notificationService.createNotification({
+        receiverId: updatedPayment.memberId,
+        senderId: null,
+        notificationType: NotificationType.PAYMENT_FAILED,
+        notificationTitle: 'Payment failed',
+        notificationMessage: 'Your payment could not be completed.',
+        referenceType: NotificationReferenceType.PAYMENT,
+        referenceId: updatedPayment._id,
+      });
+    }
+
+    if (paymentStatus === PaymentStatus.REFUNDED) {
+      await this.notificationService.createNotification({
+        receiverId: updatedPayment.memberId,
+        senderId: null,
+        notificationType: NotificationType.PAYMENT_REFUNDED,
+        notificationTitle: 'Payment refunded',
+        notificationMessage: 'Your payment has been refunded.',
+        referenceType: NotificationReferenceType.PAYMENT,
+        referenceId: updatedPayment._id,
+      });
     }
 
     return updatedPayment;
