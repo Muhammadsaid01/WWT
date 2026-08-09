@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
@@ -18,9 +17,11 @@ import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { BookingStatus } from '../../libs/enums/booking.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { LikeTargetType } from '../../libs/enums/community.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { PackageStatus } from '../../libs/enums/package.enum';
 import { BookingService } from '../booking/booking.service';
 import { LikesService } from '../likes/likes.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class ReviewService {
@@ -34,6 +35,8 @@ export class ReviewService {
     private readonly bookingService: BookingService,
 
     private readonly likeService: LikesService,
+
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async createReview(memberId: ObjectId, input: ReviewInput): Promise<Review> {
@@ -67,6 +70,18 @@ export class ReviewService {
     });
 
     await this.recalculatePackageRating(booking.packageId);
+
+    await this.notificationService.createNotification({
+      receiverId: booking.agentId,
+      senderId: memberId,
+      notificationType: NotificationType.NEW_REVIEW,
+      notificationTitle: 'New review received',
+      notificationMessage: 'A traveler left a new review on your travel package.',
+      referenceType: NotificationReferenceType.REVIEW,
+      referenceId: createdReview._id,
+    });
+
+    return createdReview;
 
     return createdReview;
   }
