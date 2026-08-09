@@ -5,6 +5,7 @@ import AgentSchema from '../../schemas/accounts/Agent.schema';
 import MemberSchema from '../../schemas/accounts/Member.schema';
 import { AuthModule } from '../auth/auth.module';
 import { MemberModule } from '../member/member.module';
+import { NotificationModule } from '../notification/notification.module';
 import { AgentRequestResolver } from './agent-request.resolver';
 import { AgentRequestService } from './agent-request.service';
 
@@ -26,6 +27,7 @@ import { AgentRequestService } from './agent-request.service';
     ]),
     AuthModule,
     MemberModule,
+    NotificationModule,
   ],
   providers: [AgentRequestService, AgentRequestResolver],
   exports: [AgentRequestService],

@@ -17,7 +17,9 @@ import { Member } from '../../libs/dto/member/member';
 import { AgentRequestStatus } from '../../libs/enums/agent-request.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { MemberType } from '../../libs/enums/member.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { AuthService } from '../auth/auth.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class AgentRequestService {
@@ -29,6 +31,7 @@ export class AgentRequestService {
     @InjectModel('Member')
     private readonly memberModel: Model<Member>,
     private authService: AuthService,
+    private notificationService: NotificationService,
   ) {}
 
   public async createAgentRequest(
@@ -148,11 +151,29 @@ export class AgentRequestService {
     });
 
     request.requestStatus = AgentRequestStatus.APPROVED;
+
     request.reviewedBy = adminId;
     request.reviewedAt = new Date();
     request.rejectReason = null;
 
-    return await request.save();
+    const updatedRequest = await request.save();
+
+    await this.notificationService.createNotification({
+      receiverId: updatedRequest.memberId,
+      senderId: adminId,
+
+      notificationType: NotificationType.AGENT_REQUEST_APPROVED,
+
+      notificationTitle: 'Agent request approved',
+
+      notificationMessage: 'Congratulations! Your agent request has been approved.',
+
+      referenceType: NotificationReferenceType.AGENT_REQUEST,
+
+      referenceId: updatedRequest._id,
+    });
+
+    return updatedRequest;
   }
 
   public async rejectAgentRequestByAdmin(
@@ -176,6 +197,25 @@ export class AgentRequestService {
     request.reviewedBy = adminId;
     request.reviewedAt = new Date();
 
-    return request.save();
+    const updatedRequest = await request.save();
+
+    await this.notificationService.createNotification({
+      receiverId: updatedRequest.memberId,
+      senderId: adminId,
+
+      notificationType: NotificationType.AGENT_REQUEST_REJECTED,
+
+      notificationTitle: 'Agent request rejected',
+
+      notificationMessage: updatedRequest.rejectReason
+        ? `Your agent request has been rejected. Reason: ${updatedRequest.rejectReason}`
+        : 'Your agent request has been rejected.',
+
+      referenceType: NotificationReferenceType.AGENT_REQUEST,
+
+      referenceId: updatedRequest._id,
+    });
+
+    return updatedRequest;
   }
 }
