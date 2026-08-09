@@ -7,10 +7,12 @@ import { CommentInput, CommentsInquiry } from '../../libs/dto/community/comment.
 import { LikeInput } from '../../libs/dto/community/like.input';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { CommentStatus, LikeTargetType } from '../../libs/enums/community.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
 import { BoardArticleService } from '../board-article/board-article.service';
 import { LikesService } from '../likes/likes.service';
 import { MemberService } from '../member/member.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class CommentsService {
@@ -22,6 +24,8 @@ export class CommentsService {
 
     private readonly boardArticleService: BoardArticleService,
     private readonly likeService: LikesService,
+
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async createComment(memberId: ObjectId, input: CommentInput): Promise<CommentEntity> {
@@ -64,6 +68,18 @@ export class CommentsService {
       targetKey: 'memberComments',
       modifier: 1,
     });
+
+    if (targetArticle.memberId.toString() !== memberId.toString()) {
+      await this.notificationService.createNotification({
+        receiverId: targetArticle.memberId,
+        senderId: memberId,
+        notificationType: NotificationType.NEW_COMMENT,
+        notificationTitle: 'New comment',
+        notificationMessage: 'Someone commented on your article.',
+        referenceType: NotificationReferenceType.COMMENT,
+        referenceId: result._id,
+      });
+    }
 
     return result;
   }
