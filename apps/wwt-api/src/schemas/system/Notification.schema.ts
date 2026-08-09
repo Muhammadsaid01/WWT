@@ -53,10 +53,6 @@ const NotificationSchema = new Schema(
       type: Date,
       default: null,
     },
-
-    notificationDeletedAt: {
-      type: Date,
-    },
   },
   {
     timestamps: true,
@@ -64,8 +60,31 @@ const NotificationSchema = new Schema(
   },
 );
 
-NotificationSchema.index({ receiverId: 1, isRead: 1 });
-NotificationSchema.index({ receiverId: 1, createdAt: -1 });
-NotificationSchema.index({ referenceType: 1, referenceId: 1 });
+NotificationSchema.index({
+  receiverId: 1,
+  isRead: 1,
+});
+
+NotificationSchema.index({
+  receiverId: 1,
+  createdAt: -1,
+});
+
+NotificationSchema.index({
+  referenceType: 1,
+  referenceId: 1,
+});
+
+/*
+ * 30 kundan keyin MongoDB avtomatik hard delete qiladi
+ */
+NotificationSchema.index(
+  {
+    createdAt: 1,
+  },
+  {
+    expireAfterSeconds: 60 * 60 * 24 * 30,
+  },
+);
 
 export default NotificationSchema;

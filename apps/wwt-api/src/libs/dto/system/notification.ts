@@ -1,7 +1,6 @@
 import { Field, ObjectType } from '@nestjs/graphql';
-import type { ObjectId } from 'mongoose';
+import { ObjectId } from 'mongoose';
 import { NotificationReferenceType, NotificationType } from '../../enums/notification.enum';
-import { TotalCounter } from '../member/member';
 
 @ObjectType()
 export class Notification {
@@ -35,21 +34,9 @@ export class Notification {
   @Field(() => Date, { nullable: true })
   readAt?: Date;
 
-  @Field(() => Date, { nullable: true })
-  notificationDeletedAt?: Date;
-
   @Field(() => Date)
   createdAt: Date;
 
   @Field(() => Date)
   updatedAt: Date;
-}
-
-@ObjectType()
-export class Notifications {
-  @Field(() => [Notification])
-  list: Notification[];
-
-  @Field(() => [TotalCounter], { nullable: true })
-  metaCounter?: TotalCounter[];
 }
