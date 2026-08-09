@@ -11,6 +11,7 @@ import { AgentModule } from '../agent/agent.module';
 import { AuthModule } from '../auth/auth.module';
 import { LikesModule } from '../likes/likes.module';
 import { MemberModule } from '../member/member.module';
+import { NotificationModule } from '../notification/notification.module';
 import { ViewModule } from '../view/view.module';
 import { TravelPackageResolver } from './travel-package.resolver';
 import { TravelPackageService } from './travel-package.service';
@@ -31,6 +32,7 @@ import { TravelPackageService } from './travel-package.service';
     MemberModule,
     AgentModule,
     LikesModule,
+    NotificationModule,
   ],
   providers: [TravelPackageResolver, TravelPackageService],
   exports: [TravelPackageService],

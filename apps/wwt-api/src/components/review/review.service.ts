@@ -210,6 +210,23 @@ export class ReviewService {
       throw new BadRequestException(Message.UPDATE_FAILED);
     }
 
+    if (modifier === 1 && target.memberId.toString() !== memberId.toString()) {
+      await this.notificationService.createNotification({
+        receiverId: target.memberId,
+        senderId: memberId,
+
+        notificationType: NotificationType.NEW_LIKE,
+
+        notificationTitle: 'New like',
+
+        notificationMessage: 'Someone liked your review.',
+
+        referenceType: NotificationReferenceType.REVIEW,
+
+        referenceId: target._id,
+      });
+    }
+
     return result;
   }
 

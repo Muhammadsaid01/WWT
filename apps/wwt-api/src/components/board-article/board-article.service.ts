@@ -20,9 +20,11 @@ import { LikeInput } from '../../libs/dto/community/like.input';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { ArticleStatus, LikeTargetType, ViewTargetType } from '../../libs/enums/community.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { StatisticModifier } from '../../libs/types/common';
 import { LikesService } from '../likes/likes.service';
 import { MemberService } from '../member/member.service';
+import { NotificationService } from '../notification/notification.service';
 import { ViewService } from '../view/view.service';
 
 @Injectable()
@@ -32,6 +34,7 @@ export class BoardArticleService {
     private memberService: MemberService,
     private viewService: ViewService,
     private likeService: LikesService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async createBoardArticle(
@@ -140,6 +143,23 @@ export class BoardArticleService {
 
     if (!result) {
       throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
+    if (modifier === 1 && target.memberId.toString() !== memberId.toString()) {
+      await this.notificationService.createNotification({
+        receiverId: target.memberId,
+        senderId: memberId,
+
+        notificationType: NotificationType.NEW_LIKE,
+
+        notificationTitle: 'New like',
+
+        notificationMessage: 'Someone liked your article.',
+
+        referenceType: NotificationReferenceType.ARTICLE,
+
+        referenceId: target._id,
+      });
     }
 
     return result;

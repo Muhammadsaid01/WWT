@@ -18,9 +18,11 @@ import { AgentStatus } from '../../libs/enums/agent.enum';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { LikeTargetType, ViewTargetType } from '../../libs/enums/community.enum';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { AuthService } from '../auth/auth.service';
 import { LikesService } from '../likes/likes.service';
+import { NotificationService } from '../notification/notification.service';
 import { ViewService } from '../view/view.service';
 
 @Injectable()
@@ -30,9 +32,10 @@ export class MemberService {
 
     @InjectModel('Agent') private readonly agentModel: Model<Agent>,
     @InjectModel('Follow') private readonly followModel: Model<Follower | Following>,
-    private authService: AuthService,
-    private viewService: ViewService,
-    private likeService: LikesService,
+    private readonly authService: AuthService,
+    private readonly viewService: ViewService,
+    private readonly likeService: LikesService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async signup(input: MemberInput): Promise<Member> {
@@ -169,7 +172,6 @@ export class MemberService {
   }
 
   public async likeTargetMember(memberId: ObjectId, targetId: ObjectId): Promise<Member> {
-    // O'zini o'zi like qilishni bloklaymiz
     if (memberId.toString() === targetId.toString()) {
       throw new BadRequestException('You cannot like yourself.');
     }
@@ -202,6 +204,23 @@ export class MemberService {
 
     if (!result) {
       throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
+    if (modifier === 1) {
+      await this.notificationService.createNotification({
+        receiverId: targetId,
+        senderId: memberId,
+
+        notificationType: NotificationType.NEW_LIKE,
+
+        notificationTitle: 'New like',
+
+        notificationMessage: 'Someone liked your profile.',
+
+        referenceType: NotificationReferenceType.MEMBER,
+
+        referenceId: targetId,
+      });
     }
 
     return result;

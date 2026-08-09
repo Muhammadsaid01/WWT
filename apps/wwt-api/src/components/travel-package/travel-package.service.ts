@@ -60,11 +60,13 @@ import {
 } from '../../libs/dto/travel-package/travel-package.update';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { LikeTargetType, ViewTargetType } from '../../libs/enums/community.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { PackageStatus, ScheduleStatus } from '../../libs/enums/package.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { AgentService } from '../agent/agent.service';
 import { LikesService } from '../likes/likes.service';
 import { MemberService } from '../member/member.service';
+import { NotificationService } from '../notification/notification.service';
 import { ViewService } from '../view/view.service';
 
 @Injectable()
@@ -94,6 +96,7 @@ export class TravelPackageService {
     private readonly memberService: MemberService,
     private readonly viewService: ViewService,
     private readonly likeService: LikesService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async createTravelPackage(
@@ -317,6 +320,27 @@ export class TravelPackageService {
 
     if (!result) {
       throw new BadRequestException(Message.UPDATE_FAILED);
+    }
+
+    if (modifier === 1) {
+      const targetAgent = await this.agentService.findAgentById(target.agentId);
+
+      if (targetAgent && targetAgent.memberId.toString() !== memberId.toString()) {
+        await this.notificationService.createNotification({
+          receiverId: targetAgent.memberId,
+          senderId: memberId,
+
+          notificationType: NotificationType.NEW_LIKE,
+
+          notificationTitle: 'New like',
+
+          notificationMessage: 'Someone liked your travel package.',
+
+          referenceType: NotificationReferenceType.TRAVEL_PACKAGE,
+
+          referenceId: target._id,
+        });
+      }
     }
 
     return result;

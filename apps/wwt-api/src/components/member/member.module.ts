@@ -5,6 +5,7 @@ import FollowSchema from '../../schemas/accounts/Follow.schema';
 import MemberSchema from '../../schemas/accounts/Member.schema';
 import { AuthModule } from '../auth/auth.module';
 import { LikesModule } from '../likes/likes.module';
+import { NotificationModule } from '../notification/notification.module';
 import { ViewModule } from '../view/view.module';
 import { MemberResolver } from './member.resolver';
 import { MemberService } from './member.service';
@@ -19,6 +20,7 @@ import { MemberService } from './member.service';
     AuthModule,
     ViewModule,
     LikesModule,
+    NotificationModule,
   ],
   providers: [MemberResolver, MemberService],
   exports: [MemberService],
