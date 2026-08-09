@@ -26,10 +26,6 @@ const TravelMateJoinSchema = new Schema(
       default: null,
       trim: true,
     },
-
-    joinDeletedAt: {
-      type: Date,
-    },
   },
   {
     timestamps: true,

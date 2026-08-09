@@ -257,3 +257,12 @@ export const unwindTravelMateMember = {
     preserveNullAndEmptyArrays: true,
   },
 };
+
+export const lookupTravelMatePost = {
+  $lookup: {
+    from: 'travelMatePosts',
+    localField: 'travelMatePostId',
+    foreignField: '_id',
+    as: 'travelMatePostData',
+  },
+};
