@@ -5,14 +5,18 @@ import { lookupFollowerData, lookupFollowingData } from '../../libs/config';
 import { Follower, Followers, Following, Followings } from '../../libs/dto/community/follow';
 import { FollowInquiry } from '../../libs/dto/community/follow.input';
 import { Direction, Message } from '../../libs/enums/common.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
 import { MemberService } from '../member/member.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class FollowService {
   constructor(
     @InjectModel('Follow') private readonly followModel: Model<Follower | Following>,
     private readonly memberService: MemberService,
+
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async subscribe(followerId: ObjectId, followingId: ObjectId): Promise<Follower> {
@@ -31,6 +35,21 @@ export class FollowService {
       _id: followingId,
       targetKey: 'memberFollowers',
       modifier: 1,
+    });
+
+    await this.notificationService.createNotification({
+      receiverId: followingId,
+      senderId: followerId,
+
+      notificationType: NotificationType.NEW_FOLLOWER,
+
+      notificationTitle: 'New follower',
+
+      notificationMessage: 'Someone started following you.',
+
+      referenceType: NotificationReferenceType.MEMBER,
+
+      referenceId: followerId,
     });
 
     return result;
