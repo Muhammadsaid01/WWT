@@ -11,8 +11,10 @@ import {
 } from '../../libs/dto/community/travel-mate-join.input';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { TravelMateJoinStatus, TravelMatePostStatus } from '../../libs/enums/community.enum';
+import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
 import { MemberService } from '../member/member.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class TravelMateJoinService {
@@ -24,6 +26,7 @@ export class TravelMateJoinService {
     private readonly travelMatePostModel: Model<TravelMatePost>,
 
     private readonly memberService: MemberService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   public async joinTravelMate(
@@ -65,6 +68,21 @@ export class TravelMateJoinService {
       memberId,
       message: input.message ?? null,
       joinStatus: TravelMateJoinStatus.PENDING,
+    });
+
+    await this.notificationService.createNotification({
+      receiverId: targetPost.memberId,
+      senderId: memberId,
+
+      notificationType: NotificationType.TRAVEL_MATE_JOIN_REQUEST,
+
+      notificationTitle: 'New travel mate request',
+
+      notificationMessage: 'Someone requested to join your travel group.',
+
+      referenceType: NotificationReferenceType.TRAVEL_MATE_POST,
+
+      referenceId: targetPost._id,
     });
 
     return result;
@@ -126,6 +144,21 @@ export class TravelMateJoinService {
       },
     });
 
+    await this.notificationService.createNotification({
+      receiverId: targetJoin.memberId,
+      senderId: memberId,
+
+      notificationType: NotificationType.TRAVEL_MATE_JOIN_APPROVED,
+
+      notificationTitle: 'Join request approved',
+
+      notificationMessage: 'Your travel mate join request has been approved.',
+
+      referenceType: NotificationReferenceType.TRAVEL_MATE_POST,
+
+      referenceId: targetPost._id,
+    });
+
     return approvedJoin;
   }
 
@@ -171,6 +204,21 @@ export class TravelMateJoinService {
     if (!rejectedJoin) {
       throw new BadRequestException(Message.UPDATE_FAILED);
     }
+
+    await this.notificationService.createNotification({
+      receiverId: targetJoin.memberId,
+      senderId: memberId,
+
+      notificationType: NotificationType.TRAVEL_MATE_JOIN_REJECTED,
+
+      notificationTitle: 'Join request rejected',
+
+      notificationMessage: 'Your travel mate join request has been rejected.',
+
+      referenceType: NotificationReferenceType.TRAVEL_MATE_POST,
+
+      referenceId: targetPost._id,
+    });
 
     return rejectedJoin;
   }
