@@ -1,5 +1,4 @@
 import { Schema } from 'mongoose';
-import { NoticeStatus } from '../../libs/enums/notice.enum';
 
 const NoticeSchema = new Schema(
   {
@@ -31,6 +30,7 @@ const NoticeSchema = new Schema(
     noticeViewCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     noticePinned: {
@@ -38,14 +38,9 @@ const NoticeSchema = new Schema(
       default: false,
     },
 
-    noticeStatus: {
-      type: String,
-      enum: NoticeStatus,
-      default: NoticeStatus.ACTIVE,
-    },
-
-    noticeDeletedAt: {
+    expireAt: {
       type: Date,
+      required: true,
     },
   },
   {
@@ -54,7 +49,25 @@ const NoticeSchema = new Schema(
   },
 );
 
-NoticeSchema.index({ noticeStatus: 1, noticePinned: -1, createdAt: -1 });
-NoticeSchema.index({ adminId: 1 });
+NoticeSchema.index({
+  noticePinned: -1,
+  createdAt: -1,
+});
+
+NoticeSchema.index({
+  adminId: 1,
+});
+
+/*
+ * expireAt kelganda MongoDB hard delete qiladi
+ */
+NoticeSchema.index(
+  {
+    expireAt: 1,
+  },
+  {
+    expireAfterSeconds: 0,
+  },
+);
 
 export default NoticeSchema;
