@@ -1,6 +1,6 @@
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
-import { FaqCategory, FaqStatus } from '../../enums/faq.enum';
+import { FaqCategory } from '../../enums/faq.enum';
 import { TotalCounter } from '../member/member';
 
 @ObjectType()
@@ -22,12 +22,6 @@ export class Faq {
 
   @Field(() => Int)
   faqOrder: number;
-
-  @Field(() => FaqStatus)
-  faqStatus: FaqStatus;
-
-  @Field(() => Date, { nullable: true })
-  faqDeletedAt?: Date;
 
   @Field(() => Date)
   createdAt: Date;

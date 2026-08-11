@@ -8,17 +8,9 @@ export enum FaqCategory {
   REFUND = 'REFUND',
   AGENT = 'AGENT',
   PACKAGE = 'PACKAGE',
+  TRAVEL_MATE = 'TRAVEL_MATE',
 }
 
 registerEnumType(FaqCategory, {
   name: 'FaqCategory',
-});
-export enum FaqStatus {
-  ACTIVE = 'ACTIVE',
-  HIDDEN = 'HIDDEN',
-  DELETED = 'DELETED',
-}
-
-registerEnumType(FaqStatus, {
-  name: 'FaqStatus',
 });

@@ -1,7 +1,7 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
 import { Direction } from '../../enums/common.enum';
-import { FaqCategory, FaqStatus } from '../../enums/faq.enum';
+import { FaqCategory } from '../../enums/faq.enum';
 
 @InputType()
 export class FaqInput {
@@ -36,11 +36,6 @@ class FaqSearch {
   faqCategory?: FaqCategory;
 
   @IsOptional()
-  @IsEnum(FaqStatus)
-  @Field(() => FaqStatus, { nullable: true })
-  faqStatus?: FaqStatus;
-
-  @IsOptional()
   @Field(() => String, { nullable: true })
   text?: string;
 }
@@ -68,16 +63,4 @@ export class FaqsInquiry {
   @IsOptional()
   @Field(() => FaqSearch, { nullable: true })
   search?: FaqSearch;
-}
-
-@InputType()
-export class UpdateFaqStatusInput {
-  @IsNotEmpty()
-  @Field(() => String)
-  faqId: string;
-
-  @IsNotEmpty()
-  @IsEnum(FaqStatus)
-  @Field(() => FaqStatus)
-  faqStatus: FaqStatus;
 }

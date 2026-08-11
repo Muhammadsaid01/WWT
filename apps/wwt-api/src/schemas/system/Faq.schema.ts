@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { FaqCategory, FaqStatus } from '../../libs/enums/faq.enum';
+import { FaqCategory } from '../../libs/enums/faq.enum';
 
 const FaqSchema = new Schema(
   {
@@ -33,16 +33,6 @@ const FaqSchema = new Schema(
       type: Number,
       default: 0,
     },
-
-    faqStatus: {
-      type: String,
-      enum: FaqStatus,
-      default: FaqStatus.ACTIVE,
-    },
-
-    faqDeletedAt: {
-      type: Date,
-    },
   },
   {
     timestamps: true,
@@ -50,7 +40,10 @@ const FaqSchema = new Schema(
   },
 );
 
-FaqSchema.index({ faqStatus: 1, faqCategory: 1, faqOrder: 1 });
+FaqSchema.index({
+  faqCategory: 1,
+  faqOrder: 1,
+});
 FaqSchema.index({ adminId: 1 });
 
 export default FaqSchema;
