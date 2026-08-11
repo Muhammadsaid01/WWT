@@ -82,4 +82,10 @@ export class UpdateReportStatusInput {
   @IsEnum(ReportStatus)
   @Field(() => ReportStatus)
   reportStatus: ReportStatus;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 1000)
+  @Field(() => String, { nullable: true })
+  adminNote?: string;
 }

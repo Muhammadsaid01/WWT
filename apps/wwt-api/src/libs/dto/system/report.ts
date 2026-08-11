@@ -1,6 +1,8 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
+
 import { ReportStatus, ReportTargetType, ReportType } from '../../enums/report.enum';
+
 import { TotalCounter } from '../member/member';
 
 @ObjectType()
@@ -26,8 +28,14 @@ export class Report {
   @Field(() => ReportStatus)
   reportStatus: ReportStatus;
 
+  @Field(() => String, { nullable: true })
+  reviewedBy?: ObjectId;
+
   @Field(() => Date, { nullable: true })
-  reportDeletedAt?: Date;
+  reviewedAt?: Date;
+
+  @Field(() => String, { nullable: true })
+  adminNote?: string;
 
   @Field(() => Date)
   createdAt: Date;

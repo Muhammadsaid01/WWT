@@ -38,8 +38,21 @@ const ReportSchema = new Schema(
       default: ReportStatus.PENDING,
     },
 
-    reportDeletedAt: {
+    reviewedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Member',
+      default: null,
+    },
+
+    reviewedAt: {
       type: Date,
+      default: null,
+    },
+
+    adminNote: {
+      type: String,
+      default: null,
+      trim: true,
     },
   },
   {
@@ -48,7 +61,6 @@ const ReportSchema = new Schema(
   },
 );
 
-// Bir user bir obyektni faqat bir marta report qiladi
 ReportSchema.index(
   {
     reporterId: 1,
@@ -60,13 +72,11 @@ ReportSchema.index(
   },
 );
 
-// Admin panel uchun
 ReportSchema.index({
   reportStatus: 1,
   createdAt: -1,
 });
 
-// Bitta obyektga tushgan barcha reportlar
 ReportSchema.index({
   targetType: 1,
   targetId: 1,
