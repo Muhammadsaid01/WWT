@@ -6,7 +6,7 @@ import { ReportStatus, ReportTargetType, ReportType } from '../../enums/report.e
 import { TotalCounter } from '../member/member';
 
 @ObjectType()
-export class Report {
+export class ReportEntity {
   @Field(() => String)
   _id: ObjectId;
 
@@ -46,8 +46,8 @@ export class Report {
 
 @ObjectType()
 export class Reports {
-  @Field(() => [Report])
-  list: Report[];
+  @Field(() => [ReportEntity])
+  list: ReportEntity[];
 
   @Field(() => [TotalCounter], { nullable: true })
   metaCounter?: TotalCounter[];
