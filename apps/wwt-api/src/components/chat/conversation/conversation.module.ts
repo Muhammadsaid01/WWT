@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import PrivateConversationSchema from '../../../schemas/chat/PrivateConversation.schema';
 import PrivateMessageSchema from '../../../schemas/chat/PrivateMessage.schema';
 import { AuthModule } from '../../auth/auth.module';
+import { MemberModule } from '../../member/member.module';
 import { ConversationResolver } from './conversation.resolver';
 import { ConversationService } from './conversation.service';
 
@@ -20,6 +21,7 @@ import { ConversationService } from './conversation.service';
     ]),
 
     AuthModule,
+    MemberModule,
   ],
 
   providers: [ConversationResolver, ConversationService],
