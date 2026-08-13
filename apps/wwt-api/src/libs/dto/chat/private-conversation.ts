@@ -19,9 +19,6 @@ export class PrivateConversation {
   @Field(() => Date, { nullable: true })
   lastMessageAt?: Date;
 
-  @Field(() => Date, { nullable: true })
-  conversationDeletedAt?: Date;
-
   @Field(() => Date)
   createdAt: Date;
 

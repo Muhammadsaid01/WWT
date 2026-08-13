@@ -24,10 +24,6 @@ const PrivateConversationSchema = new Schema(
       type: Date,
       default: null,
     },
-
-    conversationDeletedAt: {
-      type: Date,
-    },
   },
   {
     timestamps: true,

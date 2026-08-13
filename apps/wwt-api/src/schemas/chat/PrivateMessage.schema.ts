@@ -48,10 +48,6 @@ const PrivateMessageSchema = new Schema(
       type: Date,
       default: null,
     },
-
-    messageDeletedAt: {
-      type: Date,
-    },
   },
   {
     timestamps: true,

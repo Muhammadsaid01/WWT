@@ -9,10 +9,6 @@ export class PrivateMessageInput {
   @Field(() => String)
   conversationId: string;
 
-  @IsNotEmpty()
-  @Field(() => String)
-  receiverId: string;
-
   @IsOptional()
   @IsEnum(PrivateMessageType)
   @Field(() => PrivateMessageType, { nullable: true })

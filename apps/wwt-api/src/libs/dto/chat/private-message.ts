@@ -31,9 +31,6 @@ export class PrivateMessage {
   @Field(() => Date, { nullable: true })
   readAt?: Date;
 
-  @Field(() => Date, { nullable: true })
-  messageDeletedAt?: Date;
-
   @Field(() => Date)
   createdAt: Date;
 
