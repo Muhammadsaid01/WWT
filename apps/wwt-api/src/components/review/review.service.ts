@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
 import {
+  lookupAuthMemberLiked,
   lookupReviewBooking,
   lookupReviewMember,
   lookupReviewPackage,
@@ -86,7 +87,11 @@ export class ReviewService {
     return createdReview;
   }
 
-  public async getPackageReviews(packageId: ObjectId, input: ReviewsInquiry): Promise<Reviews> {
+  public async getPackageReviews(
+    memberId: ObjectId | null,
+    packageId: ObjectId,
+    input: ReviewsInquiry,
+  ): Promise<Reviews> {
     const targetPackage = await this.packageModel.findOne({
       _id: packageId,
       packageStatus: PackageStatus.ACTIVE,
@@ -127,7 +132,7 @@ export class ReviewService {
             {
               $limit: input.limit,
             },
-
+            lookupAuthMemberLiked(memberId),
             lookupReviewMember,
             unwindReviewMember,
           ],

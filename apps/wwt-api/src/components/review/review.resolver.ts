@@ -33,6 +33,8 @@ export class ReviewResolver {
   @UseGuards(AuthGuard)
   @Query(() => Reviews)
   public async getPackageReviews(
+    @AuthMember('_id')
+    memberId: ObjectId | null,
     @Args('packageId', { type: () => String })
     packageId: string,
 
@@ -43,7 +45,7 @@ export class ReviewResolver {
 
     const targetPackageId = shapeIntoMongoObjectId(packageId);
 
-    return this.reviewService.getPackageReviews(targetPackageId, input);
+    return this.reviewService.getPackageReviews(memberId, targetPackageId, input);
   }
 
   @UseGuards(WithoutGuard)

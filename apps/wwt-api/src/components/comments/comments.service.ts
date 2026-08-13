@@ -1,7 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
-import { lookupCommentArticle, lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
+import {
+  lookupAuthMemberLiked,
+  lookupCommentArticle,
+  lookupMember,
+  shapeIntoMongoObjectId,
+} from '../../libs/config';
 import { CommentEntity, Comments } from '../../libs/dto/community/comment';
 import { CommentInput, CommentsInquiry } from '../../libs/dto/community/comment.input';
 import { LikeInput } from '../../libs/dto/community/like.input';
@@ -84,7 +89,10 @@ export class CommentsService {
     return result;
   }
 
-  public async getCommentsByArticle(input: CommentsInquiry): Promise<Comments> {
+  public async getCommentsByArticle(
+    memberId: ObjectId | null,
+    input: CommentsInquiry,
+  ): Promise<Comments> {
     const search = input.search ?? {};
 
     const match: T = {
@@ -121,7 +129,7 @@ export class CommentsService {
             {
               $limit: input.limit,
             },
-
+            lookupAuthMemberLiked(memberId),
             lookupMember,
 
             {

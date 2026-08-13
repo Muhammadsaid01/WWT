@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
-import { lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
+import { lookupAuthMemberLiked, lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
 import { BoardArticle, BoardArticles } from '../../libs/dto/community/board-acticle';
 // eslint-disable-next-line prettier/prettier
 import {
@@ -311,7 +311,7 @@ export class BoardArticleService {
       {
         $limit: input.limit,
       },
-
+      lookupAuthMemberLiked(memberId),
       lookupMember,
 
       {

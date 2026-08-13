@@ -29,7 +29,10 @@ export class CommentsResolver {
 
   @UseGuards(WithoutGuard)
   @Query(() => Comments)
-  public async getCommentsByArticle(@Args('input') input: CommentsInquiry): Promise<Comments> {
+  public async getCommentsByArticle(
+    @AuthMember('_id') memberId: ObjectId | null,
+    @Args('input') input: CommentsInquiry,
+  ): Promise<Comments> {
     console.log('Query: getCommentsByArticle');
 
     if (input.search?.articleId) {
@@ -40,7 +43,7 @@ export class CommentsResolver {
       input.search.parentCommentId = shapeIntoMongoObjectId(input.search.parentCommentId);
     }
 
-    return await this.commentService.getCommentsByArticle(input);
+    return await this.commentService.getCommentsByArticle(memberId, input);
   }
 
   @UseGuards(WithoutGuard)
