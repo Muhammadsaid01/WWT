@@ -1,6 +1,7 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
 import { PrivateMessageStatus, PrivateMessageType } from '../../enums/chat.enum';
+import { TotalCounter } from '../member/member';
 
 @ObjectType()
 export class PrivateMessage {
@@ -36,4 +37,15 @@ export class PrivateMessage {
 
   @Field(() => Date)
   updatedAt: Date;
+}
+
+@ObjectType()
+export class PrivateMessages {
+  @Field(() => [PrivateMessage])
+  list: PrivateMessage[];
+
+  @Field(() => [TotalCounter], {
+    nullable: true,
+  })
+  metaCounter?: TotalCounter[];
 }

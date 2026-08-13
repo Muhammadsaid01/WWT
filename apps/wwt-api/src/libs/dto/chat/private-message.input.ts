@@ -29,10 +29,6 @@ export class PrivateMessageInput {
 class PMSearch {
   @IsOptional()
   @Field(() => String, { nullable: true })
-  conversationId?: string;
-
-  @IsOptional()
-  @Field(() => String, { nullable: true })
   senderId?: string;
 
   @IsOptional()
@@ -44,7 +40,6 @@ class PMSearch {
   @Field(() => PrivateMessageStatus, { nullable: true })
   messageStatus?: PrivateMessageStatus;
 }
-
 @InputType()
 export class PrivateMessagesInquiry {
   @IsNotEmpty()
