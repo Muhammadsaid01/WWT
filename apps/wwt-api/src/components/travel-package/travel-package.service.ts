@@ -9,7 +9,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import moment from 'moment';
 import { FilterQuery, Model, ObjectId } from 'mongoose';
-import { lookupAgent, unwindAgent } from '../../libs/config';
+import { lookupAgent, lookupAuthMemberLiked, unwindAgent } from '../../libs/config';
 import { LikeInput } from '../../libs/dto/community/like.input';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Itinerary } from '../../libs/dto/travel-package/itinerary';
@@ -372,7 +372,7 @@ export class TravelPackageService {
               { $skip: (input.page - 1) * input.limit },
               { $limit: input.limit },
 
-              // TODO: meLiked
+              lookupAuthMemberLiked(memberId),
               lookupAgent,
               unwindAgent,
             ],
