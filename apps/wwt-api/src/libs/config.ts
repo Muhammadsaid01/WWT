@@ -19,6 +19,33 @@ export const availablePackageSorts = [
   'packageRating',
 ];
 
+export const availableBookingSorts = [
+  'createdAt',
+  'updatedAt',
+  'bookingCode',
+  'bookingStatus',
+  'peopleCount',
+  'totalPrice',
+  'finalPrice',
+];
+
+export const availableBoardArticleSorts = [
+  'createdAt',
+  'updatedAt',
+  'articleLikes',
+  'articleViews',
+];
+
+// IMAGE CONFIGURATION (config.js)
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+
+export const validMimeTypes = ['image/png', 'image/jpg', 'image/jpeg'];
+export const getSerialForImage = (filename: string) => {
+  const ext = path.parse(filename).ext;
+  return uuidv4() + ext;
+};
+
 export const shapeIntoMongoObjectId = (target: any) => {
   return typeof target === 'string' ? new ObjectId(target) : target;
 };
@@ -130,15 +157,6 @@ export const unwindMember = {
 };
 
 //BOOKING
-export const availableBookingSorts = [
-  'createdAt',
-  'updatedAt',
-  'bookingCode',
-  'bookingStatus',
-  'peopleCount',
-  'totalPrice',
-  'finalPrice',
-];
 
 export const lookupBookingPackage = {
   $lookup: {
@@ -283,13 +301,6 @@ export const unwindReviewBooking = {
     preserveNullAndEmptyArrays: true,
   },
 };
-
-export const availableBoardArticleSorts = [
-  'createdAt',
-  'updatedAt',
-  'articleLikes',
-  'articleViews',
-];
 
 export const lookupCommentArticle = {
   $lookup: {
