@@ -41,9 +41,29 @@ import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 export const validMimeTypes = ['image/png', 'image/jpg', 'image/jpeg'];
+
+export const validImageExtensions = ['.png', '.jpg', '.jpeg'];
+
 export const getSerialForImage = (filename: string) => {
-  const ext = path.parse(filename).ext;
+  const ext = path.parse(filename).ext.toLowerCase();
+
   return uuidv4() + ext;
+};
+
+export const validateImage = (filename: string, mimetype: string): boolean => {
+  // Normal client
+  if (validMimeTypes.includes(mimetype)) {
+    return true;
+  }
+
+  // Postman application/octet-stream yuborsa
+  if (mimetype === 'application/octet-stream') {
+    const ext = path.parse(filename).ext.toLowerCase();
+
+    return validImageExtensions.includes(ext);
+  }
+
+  return false;
 };
 
 export const shapeIntoMongoObjectId = (target: any) => {

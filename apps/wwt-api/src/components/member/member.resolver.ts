@@ -1,10 +1,15 @@
-import { UseGuards } from '@nestjs/common';
+import { BadRequestException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { createWriteStream } from 'fs';
 import GraphQLUpload from 'graphql-upload/GraphQLUpload.mjs';
 import type { FileUpload } from 'graphql-upload/processRequest.mjs';
 import { ObjectId } from 'mongoose';
-import { getSerialForImage, shapeIntoMongoObjectId, validMimeTypes } from '../../libs/config';
+import {
+  getSerialForImage,
+  shapeIntoMongoObjectId,
+  validateImage,
+  validMimeTypes,
+} from '../../libs/config';
 import { Member, Members } from '../../libs/dto/member/member';
 import { LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
 import { MemberUpdate, MemberUpdateByAdmin } from '../../libs/dto/member/member.update';
@@ -138,30 +143,36 @@ export class MemberResolver {
 
   // IMAGE UPLOADER
 
+  // IMAGE UPLOADER
+
   @UseGuards(AuthGuard)
   @Mutation(() => String)
   public async imageUploader(
     @Args('file', { type: () => GraphQLUpload })
-    file: Promise<FileUpload>,
+    file: FileUpload,
 
     @Args('target')
     target: string,
   ): Promise<string> {
     console.log('Mutation: imageUploader');
 
-    const { createReadStream, filename, mimetype } = await file;
+    const { createReadStream, filename, mimetype } = file;
+
+    console.log('filename:', filename);
+    console.log('mimetype:', mimetype);
+    console.log('file:', file);
+
+    const validImage = validateImage(filename, mimetype);
 
     if (!filename) {
       throw new Error(Message.UPLOAD_FAILED);
     }
 
-    const validMime = validMimeTypes.includes(mimetype);
-
-    if (!validMime) {
-      throw new Error(Message.PROVIDE_ALLOWED_FORMAT);
+    if (!validImage) {
+      throw new BadRequestException(Message.PROVIDE_ALLOWED_FORMAT);
     }
-
     const imageName = getSerialForImage(filename);
+
     const url = `uploads/${target}/${imageName}`;
 
     const stream = createReadStream();
@@ -170,7 +181,7 @@ export class MemberResolver {
       stream
         .pipe(createWriteStream(url))
         .on('finish', () => resolve(true))
-        .on('error', () => reject(false));
+        .on('error', reject);
     });
 
     if (!result) {
@@ -188,7 +199,7 @@ export class MemberResolver {
     @Args('files', {
       type: () => [GraphQLUpload],
     })
-    files: Promise<FileUpload>[],
+    files: FileUpload[],
 
     @Args('target')
     target: string,
@@ -197,46 +208,31 @@ export class MemberResolver {
 
     const uploadedImages: string[] = [];
 
-    const promisedList = files.map(
-      async (img: Promise<FileUpload>, index: number): Promise<void> => {
-        try {
-          const { filename, mimetype, createReadStream } = await img;
+    const promisedList = files.map(async (img: FileUpload, index: number): Promise<void> => {
+      const { filename, mimetype, createReadStream } = img;
 
-          if (!filename) {
-            throw new Error(Message.UPLOAD_FAILED);
-          }
+      if (!filename) {
+        throw new Error(Message.UPLOAD_FAILED);
+      }
 
-          const validMime = validMimeTypes.includes(mimetype);
+      const validMime = validMimeTypes.includes(mimetype);
 
-          if (!validMime) {
-            throw new Error(Message.PROVIDE_ALLOWED_FORMAT);
-          }
+      if (!validMime) {
+        throw new Error(Message.PROVIDE_ALLOWED_FORMAT);
+      }
 
-          const imageName = getSerialForImage(filename);
+      const imageName = getSerialForImage(filename);
 
-          const url = `uploads/${target}/${imageName}`;
+      const url = `uploads/${target}/${imageName}`;
 
-          const stream = createReadStream();
+      const stream = createReadStream();
 
-          const result = await new Promise<boolean>((resolve, reject) => {
-            stream
-              .pipe(createWriteStream(url))
-              .on('finish', () => resolve(true))
-              .on('error', () => reject(false));
-          });
+      await new Promise<void>((resolve, reject) => {
+        stream.pipe(createWriteStream(url)).on('finish', resolve).on('error', reject);
+      });
 
-          if (!result) {
-            throw new Error(Message.UPLOAD_FAILED);
-          }
-
-          uploadedImages[index] = url;
-        } catch (err) {
-          console.log('Error, file upload failed!', err);
-
-          throw err;
-        }
-      },
-    );
+      uploadedImages[index] = url;
+    });
 
     await Promise.all(promisedList);
 
