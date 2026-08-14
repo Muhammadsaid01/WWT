@@ -4,12 +4,7 @@ import { createWriteStream } from 'fs';
 import GraphQLUpload from 'graphql-upload/GraphQLUpload.mjs';
 import type { FileUpload } from 'graphql-upload/processRequest.mjs';
 import { ObjectId } from 'mongoose';
-import {
-  getSerialForImage,
-  shapeIntoMongoObjectId,
-  validateImage,
-  validMimeTypes,
-} from '../../libs/config';
+import { getSerialForImage, shapeIntoMongoObjectId, validateImage } from '../../libs/config';
 import { Member, Members } from '../../libs/dto/member/member';
 import { LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
 import { MemberUpdate, MemberUpdateByAdmin } from '../../libs/dto/member/member.update';
@@ -206,35 +201,41 @@ export class MemberResolver {
   ): Promise<string[]> {
     console.log('Mutation: imagesUploader');
 
-    const uploadedImages: string[] = [];
+    const uploadedImages = await Promise.all(
+      files.map(async (img) => {
+        // Runtime'da img Promise<FileUpload>
+        const file = await Promise.resolve(img);
 
-    const promisedList = files.map(async (img: FileUpload, index: number): Promise<void> => {
-      const { filename, mimetype, createReadStream } = img;
+        const { filename, mimetype, createReadStream } = file;
 
-      if (!filename) {
-        throw new Error(Message.UPLOAD_FAILED);
-      }
+        console.log('filename:', filename);
+        console.log('mimetype:', mimetype);
 
-      const validMime = validMimeTypes.includes(mimetype);
+        if (!filename) {
+          throw new Error(Message.UPLOAD_FAILED);
+        }
 
-      if (!validMime) {
-        throw new Error(Message.PROVIDE_ALLOWED_FORMAT);
-      }
+        const validImage = validateImage(filename, mimetype);
 
-      const imageName = getSerialForImage(filename);
+        console.log('validImage:', validImage);
 
-      const url = `uploads/${target}/${imageName}`;
+        if (!validImage) {
+          throw new BadRequestException(Message.PROVIDE_ALLOWED_FORMAT);
+        }
 
-      const stream = createReadStream();
+        const imageName = getSerialForImage(filename);
 
-      await new Promise<void>((resolve, reject) => {
-        stream.pipe(createWriteStream(url)).on('finish', resolve).on('error', reject);
-      });
+        const url = `uploads/${target}/${imageName}`;
 
-      uploadedImages[index] = url;
-    });
+        const stream = createReadStream();
 
-    await Promise.all(promisedList);
+        await new Promise<void>((resolve, reject) => {
+          stream.pipe(createWriteStream(url)).on('finish', resolve).on('error', reject);
+        });
+
+        return url;
+      }),
+    );
 
     return uploadedImages;
   }
