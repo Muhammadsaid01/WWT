@@ -372,3 +372,12 @@ export const lookupTravelMatePost = {
     as: 'travelMatePostData',
   },
 };
+
+export const lookupFavorite = {
+  $lookup: {
+    from: 'agents',
+    localField: 'favoritePackage.agentId',
+    foreignField: '_id',
+    as: 'favoritePackage.agentData',
+  },
+};

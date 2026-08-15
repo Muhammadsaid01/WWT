@@ -51,6 +51,7 @@ import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/tra
 import {
   AgentTravelPackagesInquiry,
   AllTravelPackagesInquiry,
+  OrdinaryInquiry,
   TravelPackageInput,
   TravelPackagesInquiry,
 } from '../../libs/dto/travel-package/travel-package.input';
@@ -445,6 +446,10 @@ export class TravelPackageService {
         { destinationCity: regex },
       ];
     }
+  }
+
+  public async getFavorities(memberId: ObjectId, input: OrdinaryInquiry): Promise<TravelPackages> {
+    return await this.likeService.getFavoritePackages(memberId, input);
   }
 
   public async getAllTravelPackagesByAdmin(

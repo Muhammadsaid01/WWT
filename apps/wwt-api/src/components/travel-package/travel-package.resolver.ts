@@ -42,6 +42,7 @@ import { TravelPackage, TravelPackages } from '../../libs/dto/travel-package/tra
 import {
   AgentTravelPackagesInquiry,
   AllTravelPackagesInquiry,
+  OrdinaryInquiry,
   TravelPackageInput,
   TravelPackagesInquiry,
 } from '../../libs/dto/travel-package/travel-package.input';
@@ -144,6 +145,16 @@ export class TravelPackageResolver {
   ): Promise<TravelPackages> {
     console.log('Mutation: getTravelPackages!');
     return this.travelService.getTravelPackages(memberId, input);
+  }
+
+  @UseGuards(AuthGuard)
+  @Query(() => TravelPackages)
+  public async getFavorities(
+    @Args('input') input: OrdinaryInquiry,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackages> {
+    console.log('Mutation: getFavorities!');
+    return this.travelService.getFavorities(memberId, input);
   }
 
   /** ADMIN  **/
