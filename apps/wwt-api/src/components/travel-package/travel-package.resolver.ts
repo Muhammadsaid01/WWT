@@ -107,7 +107,7 @@ export class TravelPackageResolver {
     @Args('input') input: AgentTravelPackagesInquiry,
     @AuthMember('_id') memberId: ObjectId,
   ): Promise<TravelPackages> {
-    console.log('getMyTravelPackages executed!');
+    console.log('Query: getMyTravelPackages executed!');
     return this.travelService.getMyTravelPackages(memberId, input);
   }
 
@@ -118,7 +118,7 @@ export class TravelPackageResolver {
     @Args('input') input: string,
     @AuthMember('_id') memberId: ObjectId,
   ): Promise<TravelPackage> {
-    console.log('Mutation: getTravelPackage!');
+    console.log('Query: getTravelPackage!');
     const packageId = shapeIntoMongoObjectId(input);
     return this.travelService.getTravelPackage(memberId, packageId);
   }
@@ -143,7 +143,7 @@ export class TravelPackageResolver {
     @Args('input') input: TravelPackagesInquiry,
     @AuthMember('_id') memberId: ObjectId,
   ): Promise<TravelPackages> {
-    console.log('Mutation: getTravelPackages!');
+    console.log('Query: getTravelPackages!');
     return this.travelService.getTravelPackages(memberId, input);
   }
 
@@ -153,8 +153,19 @@ export class TravelPackageResolver {
     @Args('input') input: OrdinaryInquiry,
     @AuthMember('_id') memberId: ObjectId,
   ): Promise<TravelPackages> {
-    console.log('Mutation: getFavorities!');
+    console.log('Query: getFavorities!');
     return this.travelService.getFavorities(memberId, input);
+  }
+
+  @UseGuards(AuthGuard)
+  @Query(() => TravelPackages)
+  public async getVisited(
+    @Args('input') input: OrdinaryInquiry,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelPackages> {
+    console.log('Query: getVisited!');
+    console.log('memberId:', memberId);
+    return this.travelService.getVisited(memberId, input);
   }
 
   /** ADMIN  **/

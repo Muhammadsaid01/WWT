@@ -81,7 +81,7 @@ export class LikesService {
     const data: T = await this.likeModel
       .aggregate([
         { $match: match },
-        { $sort: { updateAt: -1 } },
+        { $sort: { updatedAt: -1 } },
         {
           $lookup: {
             from: 'travelPackages',
@@ -105,11 +105,8 @@ export class LikesService {
       ])
       .exec();
 
-    console.log(data[0].list[0]);
-    console.log('======================');
     const result: TravelPackages = { list: [], metaCounter: data[0].metaCounter };
     result.list = data[0].list.map((ele) => ele.favoritePackage);
-    console.log(result);
     return result;
   }
 }

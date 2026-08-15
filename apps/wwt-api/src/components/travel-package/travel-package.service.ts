@@ -452,6 +452,10 @@ export class TravelPackageService {
     return await this.likeService.getFavoritePackages(memberId, input);
   }
 
+  public async getVisited(memberId: ObjectId, input: OrdinaryInquiry): Promise<TravelPackages> {
+    return await this.viewService.getVisitedPackages(memberId, input);
+  }
+
   public async getAllTravelPackagesByAdmin(
     memberId: ObjectId,
     input: AllTravelPackagesInquiry,

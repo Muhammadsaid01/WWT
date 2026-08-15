@@ -381,3 +381,12 @@ export const lookupFavorite = {
     as: 'favoritePackage.agentData',
   },
 };
+
+export const lookupVisit = {
+  $lookup: {
+    from: 'agents',
+    localField: 'visitedPackage.agentId',
+    foreignField: '_id',
+    as: 'visitedPackage.agentData',
+  },
+};
