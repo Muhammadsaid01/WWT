@@ -62,7 +62,14 @@ import {
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { LikeTargetType, ViewTargetType } from '../../libs/enums/community.enum';
 import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
-import { PackageStatus, ScheduleStatus } from '../../libs/enums/package.enum';
+import {
+  PackageCategory,
+  PackageLevel,
+  PackageStatus,
+  PackageType,
+  ScheduleStatus,
+  TransportType,
+} from '../../libs/enums/package.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { AgentService } from '../agent/agent.service';
 import { LikesService } from '../likes/likes.service';
@@ -1344,5 +1351,96 @@ export class TravelPackageService {
     }
 
     return result;
+  }
+
+  public async searchPackagesForAI(
+    destination?: string,
+    minPrice?: number,
+    maxPrice?: number,
+    days?: number,
+    category?: PackageCategory,
+    packageType?: PackageType,
+    packageLevel?: PackageLevel,
+    transportType?: TransportType,
+    people?: number,
+    minRating?: number,
+  ): Promise<TravelPackage[]> {
+    const match: FilterQuery<TravelPackage> = {
+      packageStatus: PackageStatus.ACTIVE,
+    };
+
+    if (destination) {
+      match.$or = [
+        {
+          destinationCity: {
+            $regex: destination,
+            $options: 'i',
+          },
+        },
+        {
+          destinationCountry: {
+            $regex: destination,
+            $options: 'i',
+          },
+        },
+      ];
+    }
+
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      match.packagePrice = {};
+
+      if (minPrice !== undefined) {
+        match.packagePrice.$gte = minPrice;
+      }
+
+      if (maxPrice !== undefined) {
+        match.packagePrice.$lte = maxPrice;
+      }
+    }
+
+    if (days !== undefined) {
+      match.packageDays = days;
+    }
+
+    if (category) {
+      match.packageCategory = category;
+    }
+
+    if (packageType) {
+      match.packageType = packageType;
+    }
+
+    if (packageLevel) {
+      match.packageLevel = packageLevel;
+    }
+
+    if (transportType) {
+      match.transportType = transportType;
+    }
+
+    if (people !== undefined) {
+      match.minPeople = {
+        $lte: people,
+      };
+
+      match.maxPeople = {
+        $gte: people,
+      };
+    }
+
+    if (minRating !== undefined) {
+      match.packageRating = {
+        $gte: minRating,
+      };
+    }
+
+    return this.packageModel
+      .find(match)
+      .sort({
+        packageRating: -1,
+        packageReviewCount: -1,
+      })
+      .limit(10)
+      .lean<TravelPackage[]>();
   }
 }

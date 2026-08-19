@@ -10,14 +10,17 @@ import {
 
 import * as url from 'url';
 
-import { Server, WebSocket as WsClient } from 'ws';
+import { Server } from 'ws';
 
+import { AiService } from '../components/ai/ai.service';
 import { AuthService } from '../components/auth/auth.service';
 import { MessageService } from '../components/chat/message/message.service';
 import { shapeIntoMongoObjectId } from '../libs/config';
 import { Member } from '../libs/dto/member/member';
 import { PrivateMessageType } from '../libs/enums/chat.enum';
 
+import * as WS from 'ws';
+type WsClient = WS.WebSocket;
 /**
  * ============================================================
  * PAYLOAD INTERFACES
@@ -32,12 +35,6 @@ interface SocketPayload {
 
 interface JoinConversationPayload {
   conversationId: string;
-}
-
-interface PrivateMessagePayload {
-  conversationId: string;
-  receiverId: string;
-  message: any;
 }
 
 interface TypingPayload {
@@ -110,6 +107,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   constructor(
     private readonly authService: AuthService,
     private readonly messageService: MessageService,
+    private readonly aiService: AiService,
   ) {}
 
   /**
@@ -722,7 +720,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
    */
 
   private sendToClient(client: WsClient, payload: SocketPayload): void {
-    if (client.readyState !== WsClient.OPEN) {
+    if (client.readyState !== WS.OPEN) {
       return;
     }
 
@@ -911,5 +909,167 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         totalClient: this.openChatClients.size,
       },
     });
+  }
+
+  // =========================================================
+  // AI CHAT JOIN
+  // =========================================================
+
+  @SubscribeMessage('aiChatJoin')
+  public async handleAIChatJoin(client: WsClient): Promise<void> {
+    try {
+      const authMember = this.clientsAuthMap.get(client);
+
+      if (!authMember) {
+        this.sendToClient(client, {
+          event: 'aiError',
+          message: 'Unauthorized',
+        });
+
+        return;
+      }
+
+      // Userning AI conversationini oladi.
+      // Agar mavjud bo'lmasa AiService yaratadi.
+      // Keyin oldingi AI message historyni olib keladi.
+      const messages = await this.aiService.getMessages(authMember._id);
+
+      this.sendToClient(client, {
+        event: 'aiChatHistory',
+        data: {
+          list: messages,
+        },
+      });
+
+      this.logger.verbose(`AI CHAT JOIN [${authMember.memberNick}]`);
+    } catch (err) {
+      this.logger.error('AI chat join failed', err);
+
+      this.sendToClient(client, {
+        event: 'aiError',
+        message: err instanceof Error ? err.message : 'Failed to load AI chat',
+      });
+    }
+  }
+
+  @SubscribeMessage('aiMessage')
+  public async handleAIMessage(client: WsClient, payload: string): Promise<void> {
+    try {
+      const authMember = this.clientsAuthMap.get(client);
+
+      if (!authMember) {
+        this.sendToClient(client, {
+          event: 'aiError',
+          message: 'Unauthorized',
+        });
+        return;
+      }
+
+      const content = payload?.trim();
+
+      if (!content) {
+        this.sendToClient(client, {
+          event: 'aiError',
+          message: 'Message is required',
+        });
+        return;
+      }
+
+      // 1. User message -> MongoDB
+      const userMessage = await this.aiService.saveUserMessage(authMember._id, content);
+
+      this.sendToClient(client, {
+        event: 'aiUserMessage',
+        data: userMessage,
+      });
+
+      // 2. Thinking ON
+      this.sendToClient(client, {
+        event: 'aiThinking',
+        data: {
+          isThinking: true,
+        },
+      });
+
+      const aiResult = await this.aiService.generateResponse(authMember._id);
+
+      const aiMessage = await this.aiService.saveAIMessage(
+        authMember._id,
+        aiResult.text,
+        'gemini-3.5-flash',
+        aiResult.inputTokens,
+        aiResult.outputTokens,
+      );
+
+      // 5. Response
+      this.sendToClient(client, {
+        event: 'aiResponse',
+        data: aiMessage,
+      });
+
+      // 6. Thinking OFF
+      this.sendToClient(client, {
+        event: 'aiThinking',
+        data: {
+          isThinking: false,
+        },
+      });
+
+      this.logger.verbose(`AI MESSAGE [${authMember.memberNick}]: ${content}`);
+    } catch (err) {
+      this.logger.error('AI message failed', err);
+
+      this.sendToClient(client, {
+        event: 'aiThinking',
+        data: {
+          isThinking: false,
+        },
+      });
+
+      this.sendToClient(client, {
+        event: 'aiError',
+        message: err instanceof Error ? err.message : 'AI message failed',
+      });
+    }
+  }
+
+  // =========================================================
+  // AI CHAT CLEAR / NEW CHAT
+  // =========================================================
+
+  @SubscribeMessage('aiChatClear')
+  public async handleAIChatClear(client: WsClient): Promise<void> {
+    try {
+      const authMember = this.clientsAuthMap.get(client);
+
+      if (!authMember) {
+        this.sendToClient(client, {
+          event: 'aiError',
+          message: 'Unauthorized',
+        });
+
+        return;
+      }
+
+      // AI chat historyni tozalash
+      await this.aiService.clearChat(authMember._id);
+
+      // Clientga success response
+      this.sendToClient(client, {
+        event: 'aiChatCleared',
+        data: {
+          success: true,
+        },
+      });
+
+      this.logger.verbose(`AI CHAT CLEARED [${authMember.memberNick}]`);
+    } catch (err) {
+      this.logger.error('AI chat clear failed', err);
+
+      this.sendToClient(client, {
+        event: 'aiError',
+        message: err instanceof Error ? err.message : 'Failed to clear AI chat',
+      });
+    }
   }
 }
