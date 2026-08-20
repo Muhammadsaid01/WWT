@@ -24,6 +24,21 @@ export enum Message {
   NOT_AUTHORIZED = 'You are not Authorized, please ask to admin first!',
 }
 
+export enum AIErrorCode {
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  MESSAGE_REQUIRED = 'MESSAGE_REQUIRED',
+  MESSAGE_TOO_LONG = 'MESSAGE_TOO_LONG',
+
+  AI_BUSY = 'AI_BUSY',
+  RATE_LIMIT = 'RATE_LIMIT',
+
+  QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
+  AI_TIMEOUT = 'AI_TIMEOUT',
+  AI_UNAVAILABLE = 'AI_UNAVAILABLE',
+
+  AI_ERROR = 'AI_ERROR',
+}
+
 export enum Direction {
   ASC = 1,
   DESC = -1,

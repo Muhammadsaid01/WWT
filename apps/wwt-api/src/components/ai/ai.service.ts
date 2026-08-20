@@ -52,6 +52,9 @@ interface AIGeneratedResponse {
 @Injectable()
 export class AiService {
   private readonly gemini: GoogleGenAI;
+  private readonly AI_SEARCH_HISTORY_LIMIT = 10;
+  private readonly AI_CONVERSATION_HISTORY_LIMIT = 12;
+  private readonly AI_HISTORY_MESSAGE_MAX_LENGTH = 1000;
 
   constructor(
     @InjectModel('AIConversation')
@@ -228,15 +231,10 @@ export class AiService {
     // PREVIOUS HISTORY FOR SEARCH MEMORY
     // =========================================================
 
-    const previousHistory = messages
-      .slice(0, -1)
-      .slice(-10)
-      .map((message) => {
-        const role = message.messageRole === AIMessageRole.USER ? 'USER' : 'ASSISTANT';
-
-        return `${role}: ${message.messageContent}`;
-      })
-      .join('\n');
+    const previousHistory = this.buildAIHistory(
+      messages.slice(0, -1),
+      this.AI_SEARCH_HISTORY_LIMIT,
+    );
 
     // =========================================================
     // EXTRACT SEARCH FILTERS + PARSER TOKEN USAGE
@@ -335,14 +333,7 @@ export class AiService {
     // FULL HISTORY FOR FINAL RESPONSE
     // =========================================================
 
-    const history = messages
-      .slice(-20)
-      .map((message) => {
-        const role = message.messageRole === AIMessageRole.USER ? 'USER' : 'ASSISTANT';
-
-        return `${role}: ${message.messageContent}`;
-      })
-      .join('\n');
+    const history = this.buildAIHistory(messages, this.AI_CONVERSATION_HISTORY_LIMIT);
 
     // =========================================================
     // FINAL PROMPT
@@ -589,5 +580,21 @@ Do not add explanations.
         outputTokens,
       };
     }
+  }
+
+  private buildAIHistory(messages: AIMessage[], limit: number): string {
+    return messages
+      .slice(-limit)
+      .map((message) => {
+        const role = message.messageRole === AIMessageRole.USER ? 'USER' : 'ASSISTANT';
+
+        const content =
+          message.messageContent.length > this.AI_HISTORY_MESSAGE_MAX_LENGTH
+            ? `${message.messageContent.slice(0, this.AI_HISTORY_MESSAGE_MAX_LENGTH)}...`
+            : message.messageContent;
+
+        return `${role}: ${content}`;
+      })
+      .join('\n');
   }
 }

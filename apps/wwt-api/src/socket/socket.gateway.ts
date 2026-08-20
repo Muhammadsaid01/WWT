@@ -12,14 +12,14 @@ import * as url from 'url';
 
 import { Server } from 'ws';
 
+import * as WS from 'ws';
 import { AiService } from '../components/ai/ai.service';
 import { AuthService } from '../components/auth/auth.service';
 import { MessageService } from '../components/chat/message/message.service';
 import { shapeIntoMongoObjectId } from '../libs/config';
 import { Member } from '../libs/dto/member/member';
 import { PrivateMessageType } from '../libs/enums/chat.enum';
-
-import * as WS from 'ws';
+import { AIErrorCode } from '../libs/enums/common.enum';
 type WsClient = WS.WebSocket;
 /**
  * ============================================================
@@ -104,6 +104,10 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   private readonly openChatMessages: OpenChatMessagePayload[] = [];
   private readonly openChatClients = new Set<WsClient>();
+  private readonly aiLastRequestMap = new Map<string, number>();
+  private readonly aiProcessingMembers = new Set<string>();
+  private readonly AI_RATE_LIMIT_MS = 3000;
+  private readonly AI_MAX_MESSAGE_LENGTH = 2000;
   constructor(
     private readonly authService: AuthService,
     private readonly messageService: MessageService,
@@ -954,28 +958,106 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
   @SubscribeMessage('aiMessage')
   public async handleAIMessage(client: WsClient, payload: string): Promise<void> {
-    try {
-      const authMember = this.clientsAuthMap.get(client);
+    const authMember = this.clientsAuthMap.get(client);
 
-      if (!authMember) {
-        this.sendToClient(client, {
-          event: 'aiError',
+    // =========================================================
+    // AUTH CHECK
+    // =========================================================
+
+    if (!authMember) {
+      this.sendToClient(client, {
+        event: 'aiError',
+        data: {
+          code: AIErrorCode.UNAUTHORIZED,
           message: 'Unauthorized',
-        });
-        return;
-      }
+        },
+      });
 
-      const content = payload?.trim();
+      return;
+    }
 
-      if (!content) {
-        this.sendToClient(client, {
-          event: 'aiError',
+    // =========================================================
+    // MESSAGE VALIDATION
+    // =========================================================
+
+    const content = payload?.trim();
+
+    // EMPTY MESSAGE
+    if (!content) {
+      this.sendToClient(client, {
+        event: 'aiError',
+        data: {
+          code: AIErrorCode.MESSAGE_REQUIRED,
           message: 'Message is required',
-        });
-        return;
-      }
+        },
+      });
 
-      // 1. User message -> MongoDB
+      return;
+    }
+
+    // MESSAGE LENGTH LIMIT
+    if (content.length > this.AI_MAX_MESSAGE_LENGTH) {
+      this.sendToClient(client, {
+        event: 'aiError',
+        data: {
+          code: AIErrorCode.MESSAGE_TOO_LONG,
+          message: `Message must not exceed ${this.AI_MAX_MESSAGE_LENGTH} characters.`,
+          maxLength: this.AI_MAX_MESSAGE_LENGTH,
+          currentLength: content.length,
+        },
+      });
+
+      return;
+    }
+
+    const memberId = authMember._id.toString();
+
+    // =========================================================
+    // CHECK IF PREVIOUS AI REQUEST IS STILL PROCESSING
+    // =========================================================
+
+    if (this.aiProcessingMembers.has(memberId)) {
+      this.sendToClient(client, {
+        event: 'aiError',
+        data: {
+          code: AIErrorCode.AI_BUSY,
+          message: 'Your previous AI request is still processing.',
+        },
+      });
+
+      return;
+    }
+
+    // =========================================================
+    // RATE LIMIT
+    // =========================================================
+
+    const retryAfter = this.checkAIRateLimit(memberId);
+
+    if (retryAfter > 0) {
+      this.sendToClient(client, {
+        event: 'aiError',
+        data: {
+          code: AIErrorCode.RATE_LIMIT,
+          message: 'Please wait before sending another message.',
+          retryAfter,
+        },
+      });
+
+      return;
+    }
+
+    // =========================================================
+    // LOCK MEMBER
+    // =========================================================
+
+    this.aiProcessingMembers.add(memberId);
+
+    try {
+      // =========================================================
+      // 1. SAVE USER MESSAGE
+      // =========================================================
+
       const userMessage = await this.aiService.saveUserMessage(authMember._id, content);
 
       this.sendToClient(client, {
@@ -983,7 +1065,10 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         data: userMessage,
       });
 
-      // 2. Thinking ON
+      // =========================================================
+      // 2. THINKING ON
+      // =========================================================
+
       this.sendToClient(client, {
         event: 'aiThinking',
         data: {
@@ -991,7 +1076,15 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         },
       });
 
+      // =========================================================
+      // 3. GENERATE AI RESPONSE
+      // =========================================================
+
       const aiResult = await this.aiService.generateResponse(authMember._id);
+
+      // =========================================================
+      // 4. SAVE AI RESPONSE
+      // =========================================================
 
       const aiMessage = await this.aiService.saveAIMessage(
         authMember._id,
@@ -1001,35 +1094,88 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         aiResult.outputTokens,
       );
 
-      // 5. Response
+      // =========================================================
+      // 5. SEND AI RESPONSE
+      // =========================================================
+
       this.sendToClient(client, {
         event: 'aiResponse',
         data: aiMessage,
       });
 
-      // 6. Thinking OFF
-      this.sendToClient(client, {
-        event: 'aiThinking',
-        data: {
-          isThinking: false,
-        },
-      });
-
       this.logger.verbose(`AI MESSAGE [${authMember.memberNick}]: ${content}`);
     } catch (err) {
-      this.logger.error('AI message failed', err);
+      // =========================================================
+      // ERROR
+      // =========================================================
 
-      this.sendToClient(client, {
-        event: 'aiThinking',
-        data: {
-          isThinking: false,
-        },
-      });
+      const errorMessage = err instanceof Error ? err.message : 'AI message failed';
+
+      this.logger.error(
+        `AI MESSAGE FAILED [${authMember.memberNick}]: ${errorMessage}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+
+      let code: AIErrorCode = AIErrorCode.AI_ERROR;
+      let message = 'AI service failed. Please try again.';
+
+      const status =
+        (err as any)?.status ?? (err as any)?.statusCode ?? (err as any)?.response?.status;
+
+      // Gemini / provider quota yoki rate-limit
+      if (status === 429) {
+        code = AIErrorCode.QUOTA_EXCEEDED;
+        message = 'AI request limit has been reached. Please try again later.';
+      }
+
+      // Gemini vaqtincha unavailable
+      else if (status === 500 || status === 502 || status === 503) {
+        code = AIErrorCode.AI_UNAVAILABLE;
+        message = 'AI service is temporarily unavailable. Please try again later.';
+      }
+
+      // Timeout
+      else if (
+        errorMessage.toLowerCase().includes('timeout') ||
+        errorMessage.toLowerCase().includes('timed out') ||
+        (err as any)?.code === 'ETIMEDOUT'
+      ) {
+        code = AIErrorCode.AI_TIMEOUT;
+        message = 'AI request timed out. Please try again.';
+      }
+
+      // Qolgan noma'lum errorlar
+      else {
+        code = AIErrorCode.AI_ERROR;
+        message = errorMessage;
+      }
 
       this.sendToClient(client, {
         event: 'aiError',
-        message: err instanceof Error ? err.message : 'AI message failed',
+        data: {
+          code,
+          message,
+        },
       });
+    } finally {
+      // =========================================================
+      // ALWAYS UNLOCK MEMBER
+      // =========================================================
+
+      this.aiProcessingMembers.delete(memberId);
+
+      // =========================================================
+      // THINKING OFF
+      // =========================================================
+
+      this.sendToClient(client, {
+        event: 'aiThinking',
+        data: {
+          isThinking: false,
+        },
+      });
+
+      this.logger.debug(`AI PROCESSING UNLOCKED [${authMember.memberNick}]`);
     }
   }
 
@@ -1071,5 +1217,27 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         message: err instanceof Error ? err.message : 'Failed to clear AI chat',
       });
     }
+  }
+
+  private checkAIRateLimit(memberId: string): number {
+    const now = Date.now();
+
+    const lastRequest = this.aiLastRequestMap.get(memberId);
+
+    if (!lastRequest) {
+      this.aiLastRequestMap.set(memberId, now);
+
+      return 0;
+    }
+
+    const difference = now - lastRequest;
+
+    if (difference >= this.AI_RATE_LIMIT_MS) {
+      this.aiLastRequestMap.set(memberId, now);
+
+      return 0;
+    }
+
+    return this.AI_RATE_LIMIT_MS - difference;
   }
 }
