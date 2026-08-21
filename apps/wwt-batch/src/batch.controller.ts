@@ -33,6 +33,11 @@ export class BatchController {
     await this.batchService.batchTopAgents();
   }
 
+  @Cron('0 1 1 * * *')
+  public async batchMemberRanks(): Promise<void> {
+    await this.batchService.batchMemberRanks();
+  }
+
   // =========================================================
   // MANUAL TEST ENDPOINTS
   // =========================================================

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
 import AgentSchema from '../../wwt-api/src/schemas/accounts/Agent.schema';
+import MemberSchema from '../../wwt-api/src/schemas/accounts/Member.schema';
 import TravelPackageSchema from '../../wwt-api/src/schemas/travel/Package.schema';
 import { BatchController } from './batch.controller';
 import { BatchService } from './batch.service';
@@ -27,6 +28,10 @@ import { DatabaseModule } from './database/database.module';
       {
         name: 'TravelPackage',
         schema: TravelPackageSchema,
+      },
+      {
+        name: 'Member',
+        schema: MemberSchema,
       },
     ]),
   ],

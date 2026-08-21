@@ -3,8 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
 import { Agent } from '../../wwt-api/src/libs/dto/agent/agent';
+import { Member } from '../../wwt-api/src/libs/dto/member/member';
 import { TravelPackage } from '../../wwt-api/src/libs/dto/travel-package/travel-package';
 import { AgentStatus, AgentVerificationStatus } from '../../wwt-api/src/libs/enums/agent.enum';
+import { MemberRank, MemberStatus } from '../../wwt-api/src/libs/enums/member.enum';
 import { PackageStatus } from '../../wwt-api/src/libs/enums/package.enum';
 
 @Injectable()
@@ -17,6 +19,9 @@ export class BatchService {
 
     @InjectModel('Agent')
     private readonly agentModel: Model<Agent>,
+
+    @InjectModel('Member')
+    private readonly memberModel: Model<Member>,
   ) {}
 
   public getHello(): string {
@@ -132,5 +137,51 @@ export class BatchService {
     await this.agentModel.bulkWrite(operations);
 
     this.logger.log(`Agent ranking updated successfully: ${agents.length} agents`);
+  }
+
+  public async batchMemberRanks(): Promise<void> {
+    const members = await this.memberModel.find({
+      memberStatus: MemberStatus.ACTIVE,
+    });
+
+    if (!members.length) {
+      this.logger.warn('No active members found');
+      return;
+    }
+
+    const operations = members.map((member) => {
+      const points = member.memberPoint ?? 0;
+
+      let memberRank: MemberRank;
+
+      if (points >= 15000) {
+        memberRank = MemberRank.DIAMOND;
+      } else if (points >= 7000) {
+        memberRank = MemberRank.PLATINUM;
+      } else if (points >= 3000) {
+        memberRank = MemberRank.GOLD;
+      } else if (points >= 1000) {
+        memberRank = MemberRank.SILVER;
+      } else {
+        memberRank = MemberRank.BRONZE;
+      }
+
+      return {
+        updateOne: {
+          filter: {
+            _id: member._id,
+          },
+          update: {
+            $set: {
+              memberRank,
+            },
+          },
+        },
+      };
+    });
+
+    await this.memberModel.bulkWrite(operations);
+
+    this.logger.log(`Member ranks updated successfully: ${members.length} members`);
   }
 }
