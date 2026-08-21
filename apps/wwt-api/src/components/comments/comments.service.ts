@@ -10,7 +10,7 @@ import {
 import { CommentEntity, Comments } from '../../libs/dto/community/comment';
 import { CommentInput, CommentsInquiry } from '../../libs/dto/community/comment.input';
 import { LikeInput } from '../../libs/dto/community/like.input';
-import { Direction, Message } from '../../libs/enums/common.enum';
+import { Direction, MemberPointAction, Message } from '../../libs/enums/common.enum';
 import { CommentStatus, LikeTargetType } from '../../libs/enums/community.enum';
 import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
@@ -73,6 +73,8 @@ export class CommentsService {
       targetKey: 'memberComments',
       modifier: 1,
     });
+
+    await this.memberService.addMemberPoint(memberId, MemberPointAction.COMMENT);
 
     if (targetArticle.memberId.toString() !== memberId.toString()) {
       await this.notificationService.createNotification({

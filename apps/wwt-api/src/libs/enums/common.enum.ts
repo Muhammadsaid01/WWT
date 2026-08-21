@@ -46,3 +46,11 @@ export enum Direction {
 registerEnumType(Direction, {
   name: 'Direction',
 });
+
+export enum MemberPointAction {
+  BOOKING = 100,
+  REVIEW = 30,
+  COMMENT = 10,
+  TRAVEL_MATE_POST = 20,
+  LIKE = 2,
+}

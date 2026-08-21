@@ -380,4 +380,18 @@ export class MemberService {
 
     return result;
   }
+
+  public async addMemberPoint(memberId: ObjectId, point: number): Promise<Member> {
+    return await this.memberModel.findByIdAndUpdate(
+      memberId,
+      {
+        $inc: {
+          memberPoint: point,
+        },
+      },
+      {
+        new: true,
+      },
+    );
+  }
 }

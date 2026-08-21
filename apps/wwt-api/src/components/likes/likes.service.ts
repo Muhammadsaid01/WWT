@@ -4,15 +4,19 @@ import { Model, ObjectId } from 'mongoose';
 import { lookupFavorite } from '../../libs/config';
 import { Like, MeLiked } from '../../libs/dto/community/like';
 import { LikeInput } from '../../libs/dto/community/like.input';
+import { Member } from '../../libs/dto/member/member';
 import { TravelPackages } from '../../libs/dto/travel-package/travel-package';
 import { OrdinaryInquiry } from '../../libs/dto/travel-package/travel-package.input';
-import { Message } from '../../libs/enums/common.enum';
+import { MemberPointAction, Message } from '../../libs/enums/common.enum';
 import { LikeTargetType } from '../../libs/enums/community.enum';
 import { T } from '../../libs/types/common';
 
 @Injectable()
 export class LikesService {
-  constructor(@InjectModel('Like') private readonly likeModel: Model<Like>) {}
+  constructor(
+    @InjectModel('Like') private readonly likeModel: Model<Like>,
+    @InjectModel('Member') private readonly memberModel: Model<Member>,
+  ) {}
 
   public async toggleLike(input: LikeInput): Promise<number> {
     const search: T = {
@@ -27,7 +31,7 @@ export class LikesService {
 
     if (existingLike) {
       await this.likeModel.findOneAndDelete(search).exec();
-
+      await this.addMemberPoint(input.memberId, -MemberPointAction.LIKE);
       modifier = -1;
     } else {
       try {
@@ -36,6 +40,8 @@ export class LikesService {
           targetId: input.targetId,
           targetType: input.targetType,
         });
+
+        await this.addMemberPoint(input.memberId, MemberPointAction.LIKE);
       } catch (error) {
         console.log('ERROR, LikeService model:', error);
 
@@ -108,5 +114,13 @@ export class LikesService {
     const result: TravelPackages = { list: [], metaCounter: data[0].metaCounter };
     result.list = data[0].list.map((ele) => ele.favoritePackage);
     return result;
+  }
+
+  private async addMemberPoint(memberId: ObjectId, point: number): Promise<void> {
+    await this.memberModel.findByIdAndUpdate(memberId, {
+      $inc: {
+        memberPoint: point,
+      },
+    });
   }
 }

@@ -5,6 +5,7 @@ import TravelPackageSchema from '../../schemas/travel/Package.schema';
 import { AuthModule } from '../auth/auth.module';
 import { BookingModule } from '../booking/booking.module';
 import { LikesModule } from '../likes/likes.module';
+import { MemberModule } from '../member/member.module';
 import { NotificationModule } from '../notification/notification.module';
 import { ReviewResolver } from './review.resolver';
 import { ReviewService } from './review.service';
@@ -26,6 +27,7 @@ import { ReviewService } from './review.service';
     AuthModule,
     LikesModule,
     NotificationModule,
+    MemberModule,
   ],
   providers: [ReviewResolver, ReviewService],
   exports: [ReviewService],

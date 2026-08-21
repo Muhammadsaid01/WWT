@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
@@ -10,7 +9,7 @@ import {
 } from '../../libs/dto/community/travel-mate.input';
 import { TravelMatePostUpdate } from '../../libs/dto/community/travel-mate.update';
 import { ViewInput } from '../../libs/dto/community/view.input';
-import { Direction, Message } from '../../libs/enums/common.enum';
+import { Direction, MemberPointAction, Message } from '../../libs/enums/common.enum';
 import { TravelMatePostStatus, ViewTargetType } from '../../libs/enums/community.enum';
 import { T } from '../../libs/types/common';
 import { MemberService } from '../member/member.service';
@@ -40,6 +39,8 @@ export class TravelMatePostService {
         targetKey: 'memberTravelMatePosts',
         modifier: 1,
       });
+
+      await this.memberService.addMemberPoint(memberId, MemberPointAction.TRAVEL_MATE_POST);
 
       return result;
     } catch (error) {

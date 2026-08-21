@@ -16,12 +16,13 @@ import { Review, Reviews } from '../../libs/dto/community/review';
 import { ReviewInput, ReviewsInquiry } from '../../libs/dto/community/review.input';
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { BookingStatus } from '../../libs/enums/booking.enum';
-import { Direction, Message } from '../../libs/enums/common.enum';
+import { Direction, MemberPointAction, Message } from '../../libs/enums/common.enum';
 import { LikeTargetType } from '../../libs/enums/community.enum';
 import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { PackageStatus } from '../../libs/enums/package.enum';
 import { BookingService } from '../booking/booking.service';
 import { LikesService } from '../likes/likes.service';
+import { MemberService } from '../member/member.service';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
@@ -38,6 +39,8 @@ export class ReviewService {
     private readonly likeService: LikesService,
 
     private readonly notificationService: NotificationService,
+
+    private readonly memberService: MemberService,
   ) {}
 
   public async createReview(memberId: ObjectId, input: ReviewInput): Promise<Review> {
@@ -82,7 +85,7 @@ export class ReviewService {
       referenceId: createdReview._id,
     });
 
-    return createdReview;
+    await this.memberService.addMemberPoint(memberId, MemberPointAction.REVIEW);
 
     return createdReview;
   }

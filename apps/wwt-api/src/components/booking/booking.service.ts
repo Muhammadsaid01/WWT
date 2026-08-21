@@ -30,11 +30,12 @@ import { Member } from '../../libs/dto/member/member';
 import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
 import { TravelPackage } from '../../libs/dto/travel-package/travel-package';
 import { BookingStatus } from '../../libs/enums/booking.enum';
-import { Direction, Message } from '../../libs/enums/common.enum';
+import { Direction, MemberPointAction, Message } from '../../libs/enums/common.enum';
 import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { PackageStatus, ScheduleStatus } from '../../libs/enums/package.enum';
 import { AgentService } from '../agent/agent.service';
 import { CouponService } from '../coupon/coupon.service';
+import { MemberService } from '../member/member.service';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
@@ -54,6 +55,7 @@ export class BookingService {
     private agentService: AgentService,
     private readonly couponService: CouponService,
     private readonly notificationService: NotificationService,
+    private readonly memberService: MemberService,
   ) {}
 
   public async createBooking(memberId: ObjectId, input: BookingInput): Promise<Booking> {
@@ -245,6 +247,7 @@ export class BookingService {
         referenceType: NotificationReferenceType.BOOKING,
         referenceId: createdBooking._id,
       });
+      await this.memberService.addMemberPoint(memberId, MemberPointAction.BOOKING);
 
       return createdBooking;
     } catch (error) {
