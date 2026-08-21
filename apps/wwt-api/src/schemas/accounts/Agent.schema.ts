@@ -96,6 +96,11 @@ const AgentSchema = new Schema(
       default: 0,
     },
 
+    agentRank: {
+      type: Number,
+      default: 0,
+    },
+
     agentApprovedAt: {
       type: Date,
       default: Date.now,
@@ -107,5 +112,6 @@ const AgentSchema = new Schema(
 AgentSchema.index({ memberId: 1 });
 AgentSchema.index({ agentStatus: 1 });
 AgentSchema.index({ verificationStatus: 1 });
+AgentSchema.index({ agentRank: -1 });
 
 export default AgentSchema;

@@ -162,6 +162,11 @@ const TravelPackageSchema = new Schema(
       default: 0,
     },
 
+    packageRank: {
+      type: Number,
+      default: 0,
+    },
+
     soldAt: {
       type: Date,
     },
@@ -180,5 +185,6 @@ TravelPackageSchema.index({ packageCategory: 1 });
 TravelPackageSchema.index({ destinationCountry: 1, destinationCity: 1 });
 TravelPackageSchema.index({ packagePrice: 1 });
 TravelPackageSchema.index({ packageRating: -1 });
+TravelPackageSchema.index({ packageRank: -1 });
 
 export default TravelPackageSchema;

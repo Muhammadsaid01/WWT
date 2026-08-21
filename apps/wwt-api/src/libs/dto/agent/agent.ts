@@ -59,6 +59,9 @@ export class Agent {
   @Field(() => Float)
   agentTotalSales: number;
 
+  @Field(() => Float)
+  agentRank: number;
+
   @Field(() => Date)
   agentApprovedAt: Date;
 

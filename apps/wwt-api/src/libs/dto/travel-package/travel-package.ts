@@ -97,6 +97,9 @@ export class TravelPackage {
   @Field(() => Int)
   packageReviewCount: number;
 
+  @Field(() => Float)
+  packageRank: number;
+
   @Field(() => Date, { nullable: true })
   soldAt?: Date;
 
