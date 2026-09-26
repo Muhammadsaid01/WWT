@@ -9,6 +9,7 @@ import { TravelerUpdate } from '../../libs/dto/booking/traveler.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TravelerService } from './traveler.service';
 
@@ -16,8 +17,7 @@ import { TravelerService } from './traveler.service';
 export class TravelerResolver {
   constructor(private readonly travelerService: TravelerService) {}
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Mutation(() => Traveler)
   public async createTraveler(
     @AuthMember('_id') memberId: ObjectId,
@@ -30,8 +30,7 @@ export class TravelerResolver {
     return await this.travelerService.createTraveler(targetMemberId, input);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Mutation(() => Traveler)
   public async updateTraveler(
     @AuthMember('_id') memberId: ObjectId,
@@ -48,8 +47,7 @@ export class TravelerResolver {
     return this.travelerService.updateTraveler(targetMemberId, targetTravelerId, input);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Mutation(() => Traveler)
   public async deleteTraveler(
     @AuthMember('_id') memberId: ObjectId,
@@ -65,8 +63,7 @@ export class TravelerResolver {
     return await this.travelerService.deleteTraveler(targetMemberId, targetTravelerId);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Query(() => [Traveler])
   public async getMyTravelersByBooking(
     @AuthMember('_id') memberId: ObjectId,
@@ -82,8 +79,7 @@ export class TravelerResolver {
     return this.travelerService.getMyTravelersByBooking(targetMemberId, targetBookingId);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Query(() => Traveler)
   public async getTraveler(
     @AuthMember('_id') memberId: ObjectId,

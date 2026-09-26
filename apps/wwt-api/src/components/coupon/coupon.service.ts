@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId } from 'mongoose';
+import { ClientSession, Model, ObjectId } from 'mongoose';
 import {
   lookupUsageBooking,
   lookupUsageCoupon,
@@ -503,6 +503,7 @@ export class CouponService {
     memberId: ObjectId,
     couponCode: string,
     bookingAmount: number,
+    session?: ClientSession,
   ): Promise<Coupon> {
     const normalizedCode = couponCode.trim().toUpperCase();
 
@@ -512,6 +513,7 @@ export class CouponService {
         couponStatus: CouponStatus.ACTIVE,
         couponDeletedAt: null,
       })
+      .session(session ?? null)
       .lean()
       .exec();
 
@@ -533,10 +535,12 @@ export class CouponService {
       throw new BadRequestException(`Minimum booking amount is ${coupon.minAmount}.`);
     }
 
-    const memberUsageCount = await this.couponUsageModel.countDocuments({
-      couponId: coupon._id,
-      memberId,
-    });
+    const memberUsageCount = await this.couponUsageModel
+      .countDocuments({
+        couponId: coupon._id,
+        memberId,
+      })
+      .session(session ?? null);
 
     if (memberUsageCount >= coupon.perUserLimit) {
       throw new BadRequestException('You have reached the usage limit for this coupon.');
@@ -567,12 +571,13 @@ export class CouponService {
     memberId: ObjectId,
     couponCode: string,
     bookingAmount: number,
+    session?: ClientSession,
   ): Promise<{
     couponId: ObjectId;
     discountAmount: number;
     finalPrice: number;
   }> {
-    const coupon = await this.findValidCoupon(memberId, couponCode, bookingAmount);
+    const coupon = await this.findValidCoupon(memberId, couponCode, bookingAmount, session);
 
     const discountAmount = this.calculateDiscount(coupon, bookingAmount);
 
@@ -585,39 +590,50 @@ export class CouponService {
     };
   }
 
-  public async createCouponUsage(input: {
-    couponId: ObjectId;
-    memberId: ObjectId;
-    bookingId: ObjectId;
-    discountAmount: number;
-  }): Promise<CouponUsage> {
-    const existingUsage = await this.couponUsageModel.findOne({
-      couponId: input.couponId,
-      memberId: input.memberId,
-      bookingId: input.bookingId,
-    });
+  public async createCouponUsage(
+    input: {
+      couponId: ObjectId;
+      memberId: ObjectId;
+      bookingId: ObjectId;
+      discountAmount: number;
+    },
+    session?: ClientSession,
+  ): Promise<CouponUsage> {
+    const existingUsage = await this.couponUsageModel
+      .findOne({
+        couponId: input.couponId,
+        memberId: input.memberId,
+        bookingId: input.bookingId,
+      })
+      .session(session ?? null);
 
     if (existingUsage) {
       throw new BadRequestException('Coupon usage already exists for this booking.');
     }
 
-    const result = await this.couponUsageModel.create({
-      couponId: input.couponId,
-      memberId: input.memberId,
-      bookingId: input.bookingId,
-      discountAmount: input.discountAmount,
-      usedAt: new Date(),
-    });
+    const [result] = await this.couponUsageModel.create(
+      [
+        {
+          couponId: input.couponId,
+          memberId: input.memberId,
+          bookingId: input.bookingId,
+          discountAmount: input.discountAmount,
+          usedAt: new Date(),
+        },
+      ],
+      { session },
+    );
 
     return result;
   }
 
-  public async increaseUsedCount(couponId: ObjectId): Promise<void> {
+  public async increaseUsedCount(couponId: ObjectId, session?: ClientSession): Promise<void> {
     const result = await this.couponModel.findOneAndUpdate(
       {
         _id: couponId,
         couponDeletedAt: null,
         couponStatus: CouponStatus.ACTIVE,
+        $expr: { $or: [{ $eq: ['$usageLimit', 0] }, { $lt: ['$usedCount', '$usageLimit'] }] },
       },
       {
         $inc: {
@@ -626,6 +642,7 @@ export class CouponService {
       },
       {
         new: true,
+        session,
       },
     );
 

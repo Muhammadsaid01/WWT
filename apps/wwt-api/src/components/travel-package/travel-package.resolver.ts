@@ -600,7 +600,7 @@ export class TravelPackageResolver {
   ): Promise<PackagePolicy[]> {
     console.log('Query: getPackageTags');
     const targetId = shapeIntoMongoObjectId(packageId);
-    return this.getPackagePolicy(targetId);
+    return this.travelService.getPackagePolicy(targetId);
   }
 
   @Roles(MemberType.ADMIN)

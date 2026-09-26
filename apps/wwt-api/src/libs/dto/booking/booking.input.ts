@@ -1,11 +1,28 @@
+import { Type } from 'class-transformer';
+import { BookingTravelerInput } from './traveler.input';
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  ValidateNested,
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { ObjectId } from 'mongoose';
 import { BookingStatus } from '../../enums/booking.enum';
 import { Direction } from '../../enums/common.enum';
 
 @InputType()
 export class BookingInput {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BookingTravelerInput)
+  @Field(() => [BookingTravelerInput])
+  travelers: BookingTravelerInput[];
+
   @IsNotEmpty()
   @Field(() => String)
   packageId: string;

@@ -1,4 +1,4 @@
-import { Field, InputType } from '@nestjs/graphql';
+import { Field, InputType, OmitType } from '@nestjs/graphql';
 import { IsDateString, IsEnum, IsNotEmpty, IsString, Length } from 'class-validator';
 import { TravelerGender } from '../../enums/traveler.enum';
 
@@ -45,3 +45,6 @@ export class TravelerInput {
   @Field(() => String)
   passportExpireDate: string;
 }
+
+@InputType()
+export class BookingTravelerInput extends OmitType(TravelerInput, ['bookingId'] as const) {}

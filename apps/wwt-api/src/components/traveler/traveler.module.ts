@@ -1,3 +1,4 @@
+import { TravelerCreationService } from './traveler-creation.service';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import TravelerSchema from '../../schemas/bookings/Traveler.schema';
@@ -14,7 +15,7 @@ import { TravelerService } from './traveler.service';
     AgentModule,
     BookingModule,
   ],
-  providers: [TravelerResolver, TravelerService],
+  providers: [TravelerResolver, TravelerService, TravelerCreationService],
   exports: [TravelerService],
 })
 export class TravelerModule {}

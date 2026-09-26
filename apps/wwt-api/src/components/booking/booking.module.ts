@@ -1,3 +1,5 @@
+import TravelerSchema from '../../schemas/bookings/Traveler.schema';
+import { TravelerCreationService } from '../traveler/traveler-creation.service';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
@@ -18,6 +20,7 @@ import { NotificationModule } from '../notification/notification.module';
   imports: [
     MongooseModule.forFeature([
       { name: 'Booking', schema: BookingSchema },
+      { name: 'Traveler', schema: TravelerSchema },
       { name: 'Member', schema: MemberSchema },
       { name: 'TravelPackage', schema: TravelPackageSchema },
       { name: 'PackageSchedule', schema: PackageScheduleSchema },
@@ -28,7 +31,7 @@ import { NotificationModule } from '../notification/notification.module';
     NotificationModule,
     MemberModule,
   ],
-  providers: [BookingResolver, BookingService],
+  providers: [BookingResolver, BookingService, TravelerCreationService],
   exports: [BookingService],
 })
 export class BookingModule {}

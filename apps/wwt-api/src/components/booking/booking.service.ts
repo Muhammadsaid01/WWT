@@ -1,14 +1,16 @@
+import { TravelerCreationService } from '../traveler/traveler-creation.service';
 /* eslint-disable prettier/prettier */
 import {
   BadRequestException,
   HttpException,
   Injectable,
+  Logger,
   InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { randomBytes } from 'crypto';
-import { Model, ObjectId } from 'mongoose';
+import { ClientSession, Model, ObjectId } from 'mongoose';
 
 import {
   availableBookingSorts,
@@ -40,6 +42,7 @@ import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class BookingService {
+  private readonly logger = new Logger(BookingService.name);
   constructor(
     @InjectModel('Booking')
     private readonly bookingModel: Model<Booking>,
@@ -56,190 +59,173 @@ export class BookingService {
     private readonly couponService: CouponService,
     private readonly notificationService: NotificationService,
     private readonly memberService: MemberService,
+    private readonly travelerCreationService: TravelerCreationService,
   ) {}
 
   public async createBooking(memberId: ObjectId, input: BookingInput): Promise<Booking> {
+    let createdBooking: Booking;
     try {
-      const {
-        packageId,
-        scheduleId,
-        couponCode,
-        adultCount = 1,
-        childCount = 0,
-        infantCount = 0,
-        currency,
-        ...bookingData
-      } = input;
+      createdBooking = await this.bookingModel.db.transaction(
+        async (session) => {
+          const {
+            packageId,
+            scheduleId,
+            couponCode,
+            adultCount = 1,
+            childCount = 0,
+            infantCount = 0,
+            currency,
+            travelers,
+            ...bookingData
+          } = input;
+          const targetPackageId = shapeIntoMongoObjectId(packageId);
+          const targetScheduleId = shapeIntoMongoObjectId(scheduleId);
 
-      /*
-       * 1. ObjectId conversion
-       */
-      const targetPackageId = shapeIntoMongoObjectId(packageId);
+          if (
+            ![adultCount, childCount, infantCount].every(
+              (count) => Number.isSafeInteger(count) && count >= 0,
+            )
+          ) {
+            throw new BadRequestException('Traveler counts must be nonnegative integers.');
+          }
+          const peopleCount = adultCount + childCount + infantCount;
+          if (!Number.isSafeInteger(peopleCount) || peopleCount < 1) {
+            throw new BadRequestException('At least one traveler is required.');
+          }
+          if (!Array.isArray(travelers) || travelers.length !== peopleCount) {
+            throw new BadRequestException('Traveler count must match peopleCount.');
+          }
+          const targetMember = await this.memberModel
+            .findOne({ _id: memberId, memberDeletedAt: null })
+            .session(session)
+            .exec();
+          if (!targetMember) throw new BadRequestException('Member not found.');
 
-      const targetScheduleId = shapeIntoMongoObjectId(scheduleId);
+          const targetPackage = await this.travelPackageModel
+            .findOne({ _id: targetPackageId, packageStatus: PackageStatus.ACTIVE })
+            .session(session)
+            .exec();
+          if (!targetPackage)
+            throw new BadRequestException('Travel package not found or inactive.');
+          if (peopleCount < targetPackage.minPeople) {
+            throw new BadRequestException('Traveler count is below the package minimum.');
+          }
+          if (peopleCount > targetPackage.maxPeople) {
+            throw new BadRequestException('Traveler count exceeds the package maximum.');
+          }
 
-      /*
-       * 2. Member tekshiruvi
-       */
-      const targetMember = await this.memberModel
-        .findOne({
-          _id: memberId,
-          memberDeletedAt: null,
-        })
-        .exec();
+          const packagePrice = Number(targetPackage.packagePrice);
+          const totalPrice = packagePrice * peopleCount;
+          if (!Number.isFinite(packagePrice) || packagePrice < 0 || !Number.isFinite(totalPrice)) {
+            throw new BadRequestException('Invalid package price.');
+          }
 
-      if (!targetMember) {
-        throw new BadRequestException('Member not found.');
-      }
+          // This conditional write is the final concurrency guard, not a prior seat read.
+          const reservedSchedule = await this.packageScheduleModel
+            .findOneAndUpdate(
+              {
+                _id: targetScheduleId,
+                packageId: targetPackageId,
+                scheduleStatus: ScheduleStatus.OPEN,
+                availableSeats: { $gte: peopleCount },
+              },
+              { $inc: { availableSeats: -peopleCount } },
+              { new: true, session },
+            )
+            .exec();
+          if (!reservedSchedule) {
+            throw new BadRequestException(
+              'Package schedule unavailable or not enough available seats.',
+            );
+          }
 
-      /*
-       * 3. Travel package tekshiruvi
-       */
-      const targetPackage = await this.travelPackageModel
-        .findOne({
-          _id: targetPackageId,
-          packageStatus: PackageStatus.ACTIVE,
-        })
-        .exec();
+          let targetCouponId: ObjectId | null = null;
+          let discountAmount = 0;
+          let finalPrice = totalPrice;
+          if (couponCode?.trim()) {
+            const couponResult = await this.couponService.applyCoupon(
+              memberId,
+              couponCode,
+              totalPrice,
+              session,
+            );
+            targetCouponId = couponResult.couponId;
+            discountAmount = couponResult.discountAmount;
+            finalPrice = couponResult.finalPrice;
+          }
+          const bookingCode = await this.generateBookingCode(session);
+          const [booking] = await this.bookingModel.create(
+            [
+              {
+                ...bookingData,
+                bookingCode,
+                memberId,
+                packageId: targetPackageId,
+                scheduleId: targetScheduleId,
+                agentId: targetPackage.agentId,
+                bookingStatus: BookingStatus.PENDING,
+                adultCount,
+                childCount,
+                infantCount,
+                peopleCount,
+                totalPrice,
+                discountAmount,
+                finalPrice,
+                currency: targetPackage.currency ?? currency ?? 'USD',
+                couponId: targetCouponId,
+              },
+            ],
+            { session },
+          );
 
-      if (!targetPackage) {
-        throw new BadRequestException('Travel package not found or inactive.');
-      }
-
-      /*
-       * 4. Schedule tekshiruvi
-       */
-      const targetSchedule = await this.packageScheduleModel
-        .findOne({
-          _id: targetScheduleId,
-          packageId: targetPackageId,
-          scheduleStatus: ScheduleStatus.OPEN,
-        })
-        .exec();
-
-      if (!targetSchedule) {
-        throw new BadRequestException('Package schedule not found or unavailable.');
-      }
-
-      /*
-       * 5. Odamlar sonini hisoblash
-       */
-      const peopleCount = adultCount + childCount + infantCount;
-
-      if (peopleCount < 1) {
-        throw new BadRequestException('At least one traveler is required.');
-      }
-
-      if (targetSchedule.availableSeats < peopleCount) {
-        throw new BadRequestException('Not enough available seats.');
-      }
-
-      /*
-       * 6. Narxni hisoblash
-       */
-      const packagePrice = Number(targetPackage.packagePrice);
-
-      if (Number.isNaN(packagePrice) || packagePrice < 0) {
-        throw new BadRequestException('Invalid package price.');
-      }
-
-      const adultTotal = packagePrice * adultCount;
-
-      const childTotal = packagePrice * childCount;
-
-      const infantTotal = packagePrice * infantCount;
-
-      const totalPrice = adultTotal + childTotal + infantTotal;
-
-      /*
-       * 7. Coupon natijalari uchun default qiymatlar
-       */
-      let targetCouponId: ObjectId | null = null;
-      let discountAmount = 0;
-      let finalPrice = totalPrice;
-
-      /*
-       * 8. Coupon yuborilgan bo‘lsa tekshiramiz
-       */
-      if (couponCode?.trim()) {
-        const couponResult = await this.couponService.applyCoupon(memberId, couponCode, totalPrice);
-
-        targetCouponId = couponResult.couponId;
-        discountAmount = couponResult.discountAmount;
-        finalPrice = couponResult.finalPrice;
-      }
-
-      /*
-       * 9. Booking code
-       */
-      const bookingCode = await this.generateBookingCode();
-
-      /*
-       * 10. Booking yaratish
-       */
-      const createdBooking = await this.bookingModel.create({
-        ...bookingData,
-
-        bookingCode,
-
-        memberId,
-        packageId: targetPackageId,
-        scheduleId: targetScheduleId,
-        agentId: targetPackage.agentId,
-
-        bookingStatus: BookingStatus.PENDING,
-
-        adultCount,
-        childCount,
-        infantCount,
-        peopleCount,
-
-        totalPrice,
-        discountAmount,
-        finalPrice,
-
-        currency: targetPackage.currency ?? currency ?? 'USD',
-
-        couponId: targetCouponId,
-      });
-
-      /*
-       * 11. Coupon ishlatilgan bo‘lsa usage yaratamiz
-       */
-      if (targetCouponId) {
-        await this.couponService.createCouponUsage({
-          couponId: targetCouponId,
-          memberId,
-          bookingId: createdBooking._id,
-          discountAmount,
-        });
-
-        await this.couponService.increaseUsedCount(targetCouponId);
-      }
-
-      /*
-       * 12. Schedule joyini kamaytirish
-       */
-      await this.packageScheduleModel.findOneAndUpdate(
-        {
-          _id: targetScheduleId,
-          packageId: targetPackageId,
-          availableSeats: {
-            $gte: peopleCount,
-          },
+          if (targetCouponId) {
+            await this.couponService.createCouponUsage(
+              {
+                couponId: targetCouponId,
+                memberId,
+                bookingId: booking._id,
+                discountAmount,
+              },
+              session,
+            );
+            // Updating the shared coupon document also serializes concurrent usage checks.
+            // A write conflict retries the transaction, including per-user-limit validation.
+            await this.couponService.increaseUsedCount(targetCouponId, session);
+          }
+          // Sequential writes use the same session; a later traveler failure aborts all writes.
+          for (const traveler of travelers) {
+            await this.travelerCreationService.create(
+              memberId,
+              booking,
+              {
+                ...traveler,
+                bookingId: booking._id.toString(),
+              },
+              session,
+            );
+          }
+          return booking;
         },
         {
-          $inc: {
-            availableSeats: -peopleCount,
-          },
+          readConcern: { level: 'snapshot' },
+          writeConcern: { w: 'majority' },
+          readPreference: 'primary',
         },
       );
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error(
+        'Booking transaction failed',
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new InternalServerErrorException(Message.CREATE_FAILED);
+    }
 
-      /*
-       * 13. Agentga notification yuboramiz
-       */
+    // Never run external side effects in a retried transaction callback. A failure
+    // here must not report a committed booking as failed and encourage duplicate retries.
+    try {
       await this.notificationService.createNotification({
-        receiverId: targetPackage.agentId,
+        receiverId: createdBooking.agentId,
         senderId: memberId,
         notificationType: NotificationType.BOOKING_CREATED,
         notificationTitle: 'New booking',
@@ -247,18 +233,21 @@ export class BookingService {
         referenceType: NotificationReferenceType.BOOKING,
         referenceId: createdBooking._id,
       });
-      await this.memberService.addMemberPoint(memberId, MemberPointAction.BOOKING);
-
-      return createdBooking;
     } catch (error) {
-      console.log('Error, Service createBooking:', error);
-
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      throw new InternalServerErrorException(Message.CREATE_FAILED);
+      this.logger.error(
+        'Post-booking notification failed',
+        error instanceof Error ? error.stack : undefined,
+      );
     }
+    try {
+      await this.memberService.addMemberPoint(memberId, MemberPointAction.BOOKING);
+    } catch (error) {
+      this.logger.error(
+        'Post-booking member points failed',
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+    return createdBooking;
   }
 
   public async cancelBooking(memberId: ObjectId, bookingId: ObjectId): Promise<Booking> {
@@ -605,7 +594,7 @@ export class BookingService {
 
   //Private Functions
 
-  private async generateBookingCode(): Promise<string> {
+  private async generateBookingCode(session?: ClientSession): Promise<string> {
     let bookingCode: string;
     let existingBooking: Booking | null;
 
@@ -618,6 +607,7 @@ export class BookingService {
 
       existingBooking = await this.bookingModel
         .findOne({ bookingCode })
+        .session(session ?? null)
         .select('_id')
         .lean()
         .exec();
