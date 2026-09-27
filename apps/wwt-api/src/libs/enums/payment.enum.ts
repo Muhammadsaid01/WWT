@@ -5,6 +5,11 @@ export enum PaymentMethod {
   KAKAOPAY = 'KAKAOPAY',
   TOSSPAY = 'TOSSPAY',
   PAYPAL = 'PAYPAL',
+  NAVERPAY = 'NAVERPAY',
+  APPLEPAY = 'APPLEPAY',
+  GOOGLEPAY = 'GOOGLEPAY',
+  ALIPAY = 'ALIPAY',
+  WECHATPAY = 'WECHATPAY',
   BANK_TRANSFER = 'BANK_TRANSFER',
 }
 registerEnumType(PaymentMethod, {

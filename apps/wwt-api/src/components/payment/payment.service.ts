@@ -1,6 +1,12 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId } from 'mongoose';
+import { Model, ObjectId, mongo } from 'mongoose';
 
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { Payment } from '../../libs/dto/booking/payment';
@@ -14,7 +20,22 @@ import { BookingService } from '../booking/booking.service';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
-export class PaymentService {
+export class PaymentService implements OnModuleInit {
+  private readonly logger = new Logger(PaymentService.name);
+  private readonly transitions: Record<PaymentStatus, readonly PaymentStatus[]> = {
+    [PaymentStatus.PENDING]: [PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.CANCELLED],
+    [PaymentStatus.PAID]: [PaymentStatus.REFUNDED],
+    [PaymentStatus.FAILED]: [],
+    [PaymentStatus.CANCELLED]: [],
+    [PaymentStatus.REFUNDED]: [],
+  };
+
+  async onModuleInit(): Promise<void> {
+    // Fail startup if the required uniqueness guard cannot be installed. Never
+    // silently accept payments without it, or drop existing indexes/data.
+    await this.paymentModel.createIndexes();
+  }
+
   constructor(
     @InjectModel('Payment')
     private readonly paymentModel: Model<Payment>,
@@ -27,44 +48,59 @@ export class PaymentService {
 
   public async createPayment(memberId: ObjectId, input: PaymentInput): Promise<Payment> {
     const bookingId = shapeIntoMongoObjectId(input.bookingId);
-
-    const booking = await this.bookingService.findActiveBookingById(bookingId);
-
-    if (booking.memberId.toString() !== memberId.toString()) {
-      throw new UnauthorizedException(Message.NOT_AUTHORIZED);
+    try {
+      return await this.paymentModel.db.transaction(
+        async (session) => {
+          const booking = await this.bookingService.findActiveBookingById(bookingId, session);
+          if (booking.memberId.toString() !== memberId.toString()) {
+            throw new UnauthorizedException(Message.NOT_AUTHORIZED);
+          }
+          if (booking.bookingStatus !== BookingStatus.PENDING) {
+            throw new BadRequestException('Only pending bookings can be paid.');
+          }
+          if (
+            !Number.isFinite(booking.finalPrice) ||
+            booking.finalPrice < 0 ||
+            !booking.currency?.trim()
+          ) {
+            throw new BadRequestException('Invalid booking amount or currency.');
+          }
+          // Write-lock the booking so concurrent cancellation/status changes conflict.
+          await this.bookingService.updateBookingStatusForPayment(
+            bookingId,
+            BookingStatus.PENDING,
+            [BookingStatus.PENDING],
+            session,
+          );
+          const [payment] = await this.paymentModel.create(
+            [
+              {
+                bookingId,
+                memberId: booking.memberId,
+                agentId: booking.agentId,
+                paymentAmount: booking.finalPrice,
+                currency: booking.currency,
+                paymentMethod: input.paymentMethod,
+                paymentStatus: PaymentStatus.PENDING,
+                // transactionId stays absent until a real provider supplies it.
+              },
+            ],
+            { session },
+          );
+          return payment;
+        },
+        {
+          readConcern: { level: 'snapshot' },
+          writeConcern: { w: 'majority' },
+          readPreference: 'primary',
+        },
+      );
+    } catch (error) {
+      if (error instanceof mongo.MongoServerError && error.code === 11000) {
+        throw new BadRequestException('An active payment already exists for this booking.');
+      }
+      throw error;
     }
-
-    if (
-      booking.bookingStatus === BookingStatus.CANCELLED ||
-      booking.bookingStatus === BookingStatus.REJECTED
-    ) {
-      throw new BadRequestException('This booking cannot be paid.');
-    }
-
-    const existingPayment = await this.paymentModel.findOne({
-      bookingId,
-      paymentDeletedAt: null,
-    });
-
-    if (existingPayment) {
-      throw new BadRequestException('Payment already exists for this booking.');
-    }
-
-    return await this.paymentModel.create({
-      bookingId,
-
-      memberId: booking.memberId,
-      agentId: booking.agentId,
-
-      paymentAmount: booking.finalPrice,
-      currency: booking.currency,
-
-      paymentMethod: input.paymentMethod,
-
-      paymentStatus: PaymentStatus.PENDING,
-
-      transactionId: null,
-    });
   }
 
   public async getMyPayments(memberId: ObjectId): Promise<Payment[]> {
@@ -165,125 +201,97 @@ export class PaymentService {
     return payment;
   }
 
+  // ADMIN today; a future verified gateway adapter can reuse this transition policy.
   public async updatePaymentStatus(
     paymentId: ObjectId,
     paymentStatus: PaymentStatus,
   ): Promise<Payment> {
-    const payment = await this.paymentModel.findOne({
-      _id: paymentId,
-      paymentDeletedAt: null,
-    });
-
-    if (!payment) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
-
-    if (payment.paymentStatus === paymentStatus) {
-      throw new BadRequestException(`Payment status is already ${paymentStatus}.`);
-    }
-
-    const updateData: Record<string, any> = {
-      paymentStatus,
-    };
-
-    switch (paymentStatus) {
-      case PaymentStatus.PAID:
-        updateData.paidAt = new Date();
-        updateData.refundedAt = null;
-
-        await this.bookingService.updateBookingStatusForPayment(
-          payment.bookingId,
-          BookingStatus.CONFIRMED,
-        );
-        break;
-
-      case PaymentStatus.REFUNDED:
-        if (payment.paymentStatus !== PaymentStatus.PAID) {
-          throw new BadRequestException('Only paid payments can be refunded.');
+    const updatedPayment = await this.paymentModel.db.transaction(
+      async (session) => {
+        const payment = await this.paymentModel
+          .findOne({ _id: paymentId, paymentDeletedAt: null })
+          .session(session);
+        if (!payment) throw new BadRequestException(Message.NO_DATA_FOUND);
+        if (!this.transitions[payment.paymentStatus]?.includes(paymentStatus)) {
+          throw new BadRequestException(
+            `Invalid payment transition: ${payment.paymentStatus} -> ${paymentStatus}.`,
+          );
         }
-
-        updateData.refundedAt = new Date();
-
-        await this.bookingService.updateBookingStatusForPayment(
-          payment.bookingId,
-          BookingStatus.CANCELLED,
+        const updateData: Record<string, unknown> = { paymentStatus };
+        if (paymentStatus === PaymentStatus.PAID) updateData.paymentDate = new Date();
+        if (paymentStatus === PaymentStatus.REFUNDED) updateData.refundedAt = new Date();
+        const updated = await this.paymentModel.findOneAndUpdate(
+          { _id: paymentId, paymentDeletedAt: null, paymentStatus: payment.paymentStatus },
+          { $set: updateData },
+          { new: true, session, runValidators: true },
         );
-        break;
-
-      case PaymentStatus.FAILED:
-        updateData.paidAt = null;
-        updateData.refundedAt = null;
-
-        await this.bookingService.updateBookingStatusForPayment(
-          payment.bookingId,
-          BookingStatus.PENDING,
-        );
-        break;
-
-      case PaymentStatus.PENDING:
-        updateData.paidAt = null;
-        updateData.refundedAt = null;
-
-        await this.bookingService.updateBookingStatusForPayment(
-          payment.bookingId,
-          BookingStatus.PENDING,
-        );
-        break;
-    }
-
-    const updatedPayment = await this.paymentModel.findOneAndUpdate(
-      {
-        _id: paymentId,
-        paymentDeletedAt: null,
+        if (!updated) throw new BadRequestException(Message.UPDATE_FAILED);
+        if (paymentStatus === PaymentStatus.PAID) {
+          await this.bookingService.updateBookingStatusForPayment(
+            payment.bookingId,
+            BookingStatus.CONFIRMED,
+            [BookingStatus.PENDING],
+            session,
+          );
+        } else if (paymentStatus === PaymentStatus.REFUNDED) {
+          // Internal status only. Financial refund and seat/coupon reconciliation
+          // are intentionally not implied by this transition.
+          await this.bookingService.updateBookingStatusForPayment(
+            payment.bookingId,
+            BookingStatus.CANCELLED,
+            [BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.CANCELLED],
+            session,
+          );
+        }
+        // FAILED/CANCELLED do not reset or resurrect a booking's current status.
+        return updated;
       },
       {
-        $set: updateData,
-      },
-      {
-        new: true,
+        readConcern: { level: 'snapshot' },
+        writeConcern: { w: 'majority' },
+        readPreference: 'primary',
       },
     );
 
-    if (!updatedPayment) {
-      throw new BadRequestException(Message.UPDATE_FAILED);
+    const notifications: Partial<
+      Record<PaymentStatus, { type: NotificationType; title: string; message: string }>
+    > = {
+      [PaymentStatus.PAID]: {
+        type: NotificationType.PAYMENT_SUCCESS,
+        title: 'Payment status updated',
+        message: 'Your payment was marked paid by an administrator.',
+      },
+      [PaymentStatus.FAILED]: {
+        type: NotificationType.PAYMENT_FAILED,
+        title: 'Payment failed',
+        message: 'Your payment attempt was marked failed.',
+      },
+      [PaymentStatus.REFUNDED]: {
+        type: NotificationType.PAYMENT_REFUNDED,
+        title: 'Refund status updated',
+        message:
+          'Your payment was marked refunded internally. This status update does not transfer money.',
+      },
+    };
+    const notification = notifications[paymentStatus];
+    if (notification) {
+      try {
+        await this.notificationService.createNotification({
+          receiverId: updatedPayment.memberId,
+          senderId: null,
+          notificationType: notification.type,
+          notificationTitle: notification.title,
+          notificationMessage: notification.message,
+          referenceType: NotificationReferenceType.PAYMENT,
+          referenceId: updatedPayment._id,
+        });
+      } catch (error) {
+        this.logger.error(
+          'Post-payment notification failed',
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
     }
-
-    if (paymentStatus === PaymentStatus.PAID) {
-      await this.notificationService.createNotification({
-        receiverId: updatedPayment.memberId,
-        senderId: null,
-        notificationType: NotificationType.PAYMENT_SUCCESS,
-        notificationTitle: 'Payment successful',
-        notificationMessage: 'Your payment has been completed successfully.',
-        referenceType: NotificationReferenceType.PAYMENT,
-        referenceId: updatedPayment._id,
-      });
-    }
-
-    if (paymentStatus === PaymentStatus.FAILED) {
-      await this.notificationService.createNotification({
-        receiverId: updatedPayment.memberId,
-        senderId: null,
-        notificationType: NotificationType.PAYMENT_FAILED,
-        notificationTitle: 'Payment failed',
-        notificationMessage: 'Your payment could not be completed.',
-        referenceType: NotificationReferenceType.PAYMENT,
-        referenceId: updatedPayment._id,
-      });
-    }
-
-    if (paymentStatus === PaymentStatus.REFUNDED) {
-      await this.notificationService.createNotification({
-        receiverId: updatedPayment.memberId,
-        senderId: null,
-        notificationType: NotificationType.PAYMENT_REFUNDED,
-        notificationTitle: 'Payment refunded',
-        notificationMessage: 'Your payment has been refunded.',
-        referenceType: NotificationReferenceType.PAYMENT,
-        referenceId: updatedPayment._id,
-      });
-    }
-
     return updatedPayment;
   }
 
@@ -301,6 +309,7 @@ export class PaymentService {
       {
         _id: paymentId,
         paymentDeletedAt: null,
+        paymentStatus: { $in: [PaymentStatus.FAILED, PaymentStatus.CANCELLED] },
       },
       {
         $set: {

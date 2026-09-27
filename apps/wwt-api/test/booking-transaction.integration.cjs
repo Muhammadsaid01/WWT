@@ -9,6 +9,7 @@ const mongoose = require('mongoose');
 const { Logger } = require('@nestjs/common');
 const { BookingService } = require('../src/components/booking/booking.service');
 const { TravelerCreationService } = require('../src/components/traveler/traveler-creation.service');
+const { PaymentService } = require('../src/components/payment/payment.service');
 const { CouponService } = require('../src/components/coupon/coupon.service');
 const schema = (path) => require(`../src/schemas/${path}`).default;
 
@@ -20,6 +21,7 @@ async function main() {
   try {
     const hello = await db.db.admin().command({ hello: 1 });
     assert(hello.setName || hello.msg === 'isdbgrid', 'Transactions require a replica set or mongos');
+    const Payment = db.model('Payment', schema('bookings/Payment.schema'));
     const Booking = db.model('Booking', schema('bookings/Booking.schema'));
     const Member = db.model('Member', new mongoose.Schema({ memberDeletedAt: Date }));
     const Package = db.model('TravelPackage', schema('travel/Package.schema'));
@@ -27,7 +29,7 @@ async function main() {
     const Coupon = db.model('Coupon', schema('coupon/Coupon.schema'));
     const Traveler = db.model('Traveler', schema('bookings/Traveler.schema'));
     const Usage = db.model('CouponUsage', schema('coupon/CouponUsage.schema'));
-    for (const model of [Booking, Member, Package, Schedule, Coupon, Usage, Traveler]) await model.init();
+    for (const model of [Booking, Member, Package, Schedule, Coupon, Usage, Traveler, Payment]) await model.init();
     // Existing schemas declare some indexes twice with conflicting options.
     // Reproduce the deployed uniqueness constraints without changing those schemas.
     await Booking.collection.createIndex({ bookingCode: 1 }, { unique: true });
@@ -40,6 +42,9 @@ async function main() {
     const points = { addMemberPoint: async () => undefined };
     const service = new BookingService(Booking, Member, Package, Schedule, {}, coupons, notifications, points, new TravelerCreationService(Traveler));
 
+    const paymentNotifications = { createNotification: async () => undefined };
+    const payments = new PaymentService(Payment, service, {}, paymentNotifications);
+    await payments.onModuleInit(); // Install the exact production Payment indexes.
     const traveler = () => ({ firstName: 'Test', lastName: 'Traveler', dateOfBirth: '1990-01-01', gender: 'OTHER', nationality: 'Test', passportNumber: randomUUID(), passportExpireDate: '2030-01-01' });
     async function fixture(options = {}) {
       const member = await Member.create({});
@@ -140,6 +145,115 @@ async function main() {
     await test('duplicate passport in booking rolls back travelers', async () => {
       const f = await fixture(); const first = traveler();
       await unchanged(f, { ...f.input, adultCount: 2, travelers: [first, { ...traveler(), passportNumber: first.passportNumber }] }, /passport already/);
+    });
+    async function paymentFixture() {
+      const f = await fixture();
+      const booking = await service.createBooking(f.member._id, f.input);
+      const input = { bookingId: String(booking._id), paymentMethod: 'CARD' };
+      return { ...f, booking, paymentInput: input };
+    }
+    await test('payment: server amount/currency and absent transactionId', async () => {
+      const f = await paymentFixture();
+      await Booking.updateOne({ _id: f.booking._id }, { $set: { finalPrice: 19, currency: 'KRW' } });
+      const payment = await payments.createPayment(f.member._id, { ...f.paymentInput, paymentAmount: 1, currency: 'USD' });
+      assert.equal(payment.paymentAmount, 19); assert.equal(payment.currency, 'KRW');
+      assert.equal(payment.paymentStatus, 'PENDING');
+      assert.equal(Object.hasOwn(await Payment.collection.findOne({ _id: payment._id }), 'transactionId'), false);
+      const other = await paymentFixture();
+      await payments.createPayment(other.member._id, other.paymentInput); // absent IDs never collide
+    });
+    await test('payment: ownership enforced', async () => {
+      const f = await paymentFixture();
+      await assert.rejects(payments.createPayment(new mongoose.Types.ObjectId(), f.paymentInput));
+      assert.equal(await Payment.countDocuments({ bookingId: f.booking._id }), 0);
+    });
+    for (const status of ['CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED']) {
+      await test(`payment: ${status} booking not payable`, async () => {
+        const f = await paymentFixture(); await Booking.updateOne({ _id: f.booking._id }, { $set: { bookingStatus: status } });
+        await assert.rejects(payments.createPayment(f.member._id, f.paymentInput), /pending/);
+        assert.equal(await Payment.countDocuments({ bookingId: f.booking._id }), 0);
+      });
+    }
+    await test('payment: concurrent creation has one winner', async () => {
+      const f = await paymentFixture();
+      const results = await Promise.allSettled([payments.createPayment(f.member._id, f.paymentInput), payments.createPayment(f.member._id, f.paymentInput)]);
+      assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+      assert.equal(await Payment.countDocuments({ bookingId: f.booking._id }), 1);
+    });
+    for (const status of ['FAILED', 'CANCELLED']) {
+      await test(`payment: new attempt after ${status}`, async () => {
+        const f = await paymentFixture(); const first = await payments.createPayment(f.member._id, f.paymentInput);
+        await payments.updatePaymentStatus(first._id, status);
+        const retry = await payments.createPayment(f.member._id, f.paymentInput);
+        assert.notEqual(String(first._id), String(retry._id));
+        assert.equal(await Payment.countDocuments({ bookingId: f.booking._id }), 2);
+        await assert.rejects(payments.updatePaymentStatus(first._id, 'PAID'), /Invalid payment transition/);
+      });
+    }
+    await test('payment: paid synchronizes booking and paymentDate', async () => {
+      const f = await paymentFixture(); const payment = await payments.createPayment(f.member._id, f.paymentInput);
+      const updated = await payments.updatePaymentStatus(payment._id, 'PAID');
+      assert.equal(updated.paymentStatus, 'PAID'); assert(updated.paymentDate instanceof Date);
+      assert.equal((await Booking.findById(f.booking._id)).bookingStatus, 'CONFIRMED');
+      assert.equal(Object.hasOwn(await Payment.collection.findOne({ _id: payment._id }), 'paidAt'), false);
+      await assert.rejects(payments.updatePaymentStatus(payment._id, 'PENDING'), /Invalid payment transition/);
+      await assert.rejects(payments.updatePaymentStatus(payment._id, 'FAILED'), /Invalid payment transition/);
+      await assert.rejects(payments.updatePaymentStatus(payment._id, 'PAID'), /Invalid payment transition/);
+    });
+    await test('payment: synchronization failure rolls both writes back', async () => {
+      const f = await paymentFixture(); const payment = await payments.createPayment(f.member._id, f.paymentInput);
+      const original = service.updateBookingStatusForPayment.bind(service); let notifications = 0;
+      paymentNotifications.createNotification = async () => { notifications++; };
+      service.updateBookingStatusForPayment = async (...args) => { await original(...args); throw new Error('Injected synchronization failure'); };
+      try { await assert.rejects(payments.updatePaymentStatus(payment._id, 'PAID')); }
+      finally { service.updateBookingStatusForPayment = original; }
+      assert.equal((await Payment.findById(payment._id)).paymentStatus, 'PENDING');
+      assert.equal((await Payment.findById(payment._id)).paymentDate, null);
+      assert.equal((await Booking.findById(f.booking._id)).bookingStatus, 'PENDING'); assert.equal(notifications, 0);
+    });
+    await test('payment: missing booking match rolls payment back', async () => {
+      const f = await paymentFixture(); const payment = await payments.createPayment(f.member._id, f.paymentInput);
+      await Booking.updateOne({ _id: f.booking._id }, { $set: { bookingDeletedAt: new Date() } });
+      await assert.rejects(payments.updatePaymentStatus(payment._id, 'PAID'), /unavailable/);
+      assert.equal((await Payment.findById(payment._id)).paymentStatus, 'PENDING');
+    });
+    await test('payment: cancelled booking cannot be resurrected by paid', async () => {
+      const f = await paymentFixture(); const payment = await payments.createPayment(f.member._id, f.paymentInput);
+      await Booking.updateOne({ _id: f.booking._id }, { $set: { bookingStatus: 'CANCELLED' } });
+      await assert.rejects(payments.updatePaymentStatus(payment._id, 'PAID'), /unavailable/);
+      await payments.updatePaymentStatus(payment._id, 'FAILED');
+      assert.equal((await Booking.findById(f.booking._id)).bookingStatus, 'CANCELLED');
+    });
+    await test('payment: internal refund is terminal with no invented reconciliation', async () => {
+      const f = await paymentFixture(); const payment = await payments.createPayment(f.member._id, f.paymentInput);
+      await assert.rejects(payments.updatePaymentStatus(payment._id, 'REFUNDED'), /Invalid payment transition/);
+      await payments.updatePaymentStatus(payment._id, 'PAID');
+      const updated = await payments.updatePaymentStatus(payment._id, 'REFUNDED');
+      assert(updated.refundedAt instanceof Date); assert(updated.paymentDate instanceof Date);
+      assert.equal(updated.refundAmount, 0);
+      assert.equal((await Booking.findById(f.booking._id)).bookingStatus, 'CANCELLED');
+      assert.equal((await Schedule.findById(f.schedule._id)).availableSeats, 3);
+      await assert.rejects(payments.updatePaymentStatus(payment._id, 'PAID'), /Invalid payment transition/);
+    });
+    await test('payment: conflicting status requests stay synchronized', async () => {
+      const f = await paymentFixture(); const payment = await payments.createPayment(f.member._id, f.paymentInput);
+      const results = await Promise.allSettled([payments.updatePaymentStatus(payment._id, 'PAID'), payments.updatePaymentStatus(payment._id, 'FAILED')]);
+      assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+      const final = await Payment.findById(payment._id);
+      assert.equal((await Booking.findById(f.booking._id)).bookingStatus, final.paymentStatus === 'PAID' ? 'CONFIRMED' : 'PENDING');
+    });
+    await test('payment: deletion cannot bypass active uniqueness', async () => {
+      const f = await paymentFixture(); const payment = await payments.createPayment(f.member._id, f.paymentInput);
+      await assert.rejects(payments.deletePaymentByAdmin(payment._id));
+      // Even a legacy soft-deleted active record remains covered by the index.
+      await Payment.updateOne({ _id: payment._id }, { $set: { paymentDeletedAt: new Date() } });
+      await assert.rejects(payments.createPayment(f.member._id, f.paymentInput), /active payment/);
+    });
+    await test('payment: notification failure preserves committed state', async () => {
+      const f = await paymentFixture(); const payment = await payments.createPayment(f.member._id, f.paymentInput);
+      paymentNotifications.createNotification = async () => { throw new Error('Notifications offline'); };
+      const updated = await payments.updatePaymentStatus(payment._id, 'PAID');
+      assert.equal(updated.paymentStatus, 'PAID'); assert.equal((await Booking.findById(f.booking._id)).bookingStatus, 'CONFIRMED');
     });
     await test('post-commit side-effect failure does not report booking failure', async () => {
       const f = await fixture(); notifications.createNotification = async () => { throw new Error('Notification offline'); };

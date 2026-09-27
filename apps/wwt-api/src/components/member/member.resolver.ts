@@ -144,44 +144,41 @@ export class MemberResolver {
   @Mutation(() => String)
   public async imageUploader(
     @Args('file', { type: () => GraphQLUpload })
-    file: FileUpload,
+    upload: FileUpload,
 
     @Args('target')
     target: string,
   ): Promise<string> {
     console.log('Mutation: imageUploader');
 
+    // GraphQLUpload runtime'da Promise<FileUpload> bo'lishi mumkin
+    const file = await Promise.resolve(upload);
+
     const { createReadStream, filename, mimetype } = file;
 
     console.log('filename:', filename);
     console.log('mimetype:', mimetype);
-    console.log('file:', file);
-
-    const validImage = validateImage(filename, mimetype);
 
     if (!filename) {
       throw new Error(Message.UPLOAD_FAILED);
     }
 
+    const validImage = validateImage(filename, mimetype);
+
+    console.log('validImage:', validImage);
+
     if (!validImage) {
       throw new BadRequestException(Message.PROVIDE_ALLOWED_FORMAT);
     }
-    const imageName = getSerialForImage(filename);
 
+    const imageName = getSerialForImage(filename);
     const url = `uploads/${target}/${imageName}`;
 
     const stream = createReadStream();
 
-    const result = await new Promise<boolean>((resolve, reject) => {
-      stream
-        .pipe(createWriteStream(url))
-        .on('finish', () => resolve(true))
-        .on('error', reject);
+    await new Promise<void>((resolve, reject) => {
+      stream.pipe(createWriteStream(url)).on('finish', resolve).on('error', reject);
     });
-
-    if (!result) {
-      throw new Error(Message.UPLOAD_FAILED);
-    }
 
     return url;
   }

@@ -86,6 +86,17 @@ const PaymentSchema = new Schema(
 PaymentSchema.index({ bookingId: 1 });
 PaymentSchema.index({ memberId: 1 });
 PaymentSchema.index({ paymentStatus: 1 });
-PaymentSchema.index({ transactionId: 1 });
+// Failed/cancelled attempts remain as history and do not block a new attempt.
+// Do not exclude soft-deleted records: deletion must never bypass this guard.
+PaymentSchema.index(
+  { bookingId: 1 },
+  {
+    name: 'one_active_payment_per_booking',
+    unique: true,
+    partialFilterExpression: {
+      paymentStatus: { $in: [PaymentStatus.PENDING, PaymentStatus.PAID] },
+    },
+  },
+);
 
 export default PaymentSchema;

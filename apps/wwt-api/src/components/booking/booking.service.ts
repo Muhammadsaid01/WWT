@@ -725,11 +725,16 @@ export class BookingService {
     };
   }
 
-  public async findActiveBookingById(bookingId: ObjectId): Promise<Booking> {
-    const booking = await this.bookingModel.findOne({
-      _id: bookingId,
-      bookingDeletedAt: null,
-    });
+  public async findActiveBookingById(
+    bookingId: ObjectId,
+    session?: ClientSession,
+  ): Promise<Booking> {
+    const booking = await this.bookingModel
+      .findOne({
+        _id: bookingId,
+        bookingDeletedAt: null,
+      })
+      .session(session ?? null);
 
     if (!booking) {
       throw new BadRequestException(Message.NO_DATA_FOUND);
@@ -741,17 +746,16 @@ export class BookingService {
   public async updateBookingStatusForPayment(
     bookingId: ObjectId,
     bookingStatus: BookingStatus,
-  ): Promise<void> {
-    await this.bookingModel.findOneAndUpdate(
-      {
-        _id: bookingId,
-        bookingDeletedAt: null,
-      },
-      {
-        $set: {
-          bookingStatus,
-        },
-      },
+    expectedStatuses: BookingStatus[],
+    session: ClientSession,
+  ): Promise<Booking> {
+    const booking = await this.bookingModel.findOneAndUpdate(
+      { _id: bookingId, bookingDeletedAt: null, bookingStatus: { $in: expectedStatuses } },
+      { $set: { bookingStatus }, $inc: { __v: 1 } },
+      { new: true, session, runValidators: true },
     );
+    if (!booking)
+      throw new BadRequestException('Booking is unavailable for this payment transition.');
+    return booking;
   }
 }
