@@ -101,6 +101,17 @@ export class TravelMateJoinResolver {
     return this.travelMateJoinService.getMyJoinedTravelMates(memberId, input);
   }
 
+  @UseGuards(AuthGuard)
+  @Query(() => TravelMateJoins)
+  public async getMyIncomingTravelMateJoinRequests(
+    @Args('input') input: TravelMateJoinsInquiry,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<TravelMateJoins> {
+    console.log('Query: getMyIncomingTravelMateJoinRequests');
+
+    return this.travelMateJoinService.getMyIncomingTravelMateJoinRequests(memberId, input);
+  }
+
   @Roles(MemberType.ADMIN)
   @UseGuards(RolesGuard)
   @Mutation(() => TravelMateJoin)

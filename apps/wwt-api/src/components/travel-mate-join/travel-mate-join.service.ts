@@ -367,6 +367,93 @@ export class TravelMateJoinService {
     };
   }
 
+  public async getMyIncomingTravelMateJoinRequests(
+    memberId: ObjectId,
+    input: TravelMateJoinsInquiry,
+  ): Promise<TravelMateJoins> {
+    const search = input.search ?? {};
+
+    const match: T = {};
+
+    if (search.joinStatus) {
+      match.joinStatus = search.joinStatus;
+    }
+
+    if (search.travelMatePostId) {
+      match.travelMatePostId = shapeIntoMongoObjectId(search.travelMatePostId);
+    }
+
+    const sort: T = {
+      [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
+    };
+
+    const result = await this.travelMateJoinModel.aggregate([
+      {
+        $match: match,
+      },
+
+      lookupTravelMatePost,
+
+      {
+        $unwind: {
+          path: '$travelMatePostData',
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+
+      // IMPORTANT:
+      // only requests belonging to posts owned by logged-in member
+      {
+        $match: {
+          'travelMatePostData.memberId': memberId,
+        },
+      },
+
+      {
+        $sort: sort,
+      },
+
+      {
+        $facet: {
+          list: [
+            {
+              $skip: (input.page - 1) * input.limit,
+            },
+            {
+              $limit: input.limit,
+            },
+
+            // Join requests reference their requester directly through memberId.
+            {
+              $lookup: {
+                ...lookupMember.$lookup,
+                localField: 'memberId',
+              },
+            },
+
+            {
+              $unwind: {
+                path: '$memberData',
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+          ],
+
+          metaCounter: [
+            {
+              $count: 'total',
+            },
+          ],
+        },
+      },
+    ]);
+
+    return {
+      list: result[0]?.list ?? [],
+      metaCounter: result[0]?.metaCounter ?? [],
+    };
+  }
+
   public async deleteTravelMateJoinByAdmin(joinId: ObjectId): Promise<TravelMateJoin> {
     const targetJoin = await this.travelMateJoinModel.findById(joinId);
 
