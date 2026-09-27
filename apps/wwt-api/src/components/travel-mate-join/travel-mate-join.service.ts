@@ -92,74 +92,114 @@ export class TravelMateJoinService {
     memberId: ObjectId,
     joinId: ObjectId,
   ): Promise<TravelMateJoin> {
-    const targetJoin = await this.travelMateJoinModel.findOne({
-      _id: joinId,
-      joinStatus: TravelMateJoinStatus.PENDING,
-    });
+    const session = await this.travelMatePostModel.db.startSession();
 
-    if (!targetJoin) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
+    let approvedJoin: TravelMateJoin | null = null;
+
+    try {
+      await session.withTransaction(async () => {
+        // 1. Request hali PENDING ekanini tekshiramiz
+        const targetJoin = await this.travelMateJoinModel
+          .findOne({
+            _id: joinId,
+            joinStatus: TravelMateJoinStatus.PENDING,
+          })
+          .session(session);
+
+        if (!targetJoin) {
+          throw new BadRequestException(Message.NO_DATA_FOUND);
+        }
+
+        // 2. Travel Mate postni topamiz
+        const targetPost = await this.travelMatePostModel
+          .findOne({
+            _id: targetJoin.travelMatePostId,
+            matePostStatus: TravelMatePostStatus.ACTIVE,
+          })
+          .session(session);
+
+        if (!targetPost) {
+          throw new BadRequestException(Message.NO_DATA_FOUND);
+        }
+
+        // 3. Faqat post owner Accept qila oladi
+        if (targetPost.memberId.toString() !== memberId.toString()) {
+          throw new ForbiddenException('Only the post owner can approve join requests.');
+        }
+
+        // 4. Joyni ATOMIC ravishda band qilamiz
+        // currentMembers < maxMembers bo‘lsagina +1
+        const reservedPost = await this.travelMatePostModel.findOneAndUpdate(
+          {
+            _id: targetPost._id,
+            memberId,
+            matePostStatus: TravelMatePostStatus.ACTIVE,
+            $expr: {
+              $lt: ['$currentMembers', '$maxMembers'],
+            },
+          },
+          {
+            $inc: {
+              currentMembers: 1,
+            },
+          },
+          {
+            new: true,
+            session,
+          },
+        );
+
+        if (!reservedPost) {
+          throw new BadRequestException('Travel mate group is already full.');
+        }
+
+        // 5. Requestni APPROVED qilamiz
+        approvedJoin = await this.travelMateJoinModel.findOneAndUpdate(
+          {
+            _id: joinId,
+            joinStatus: TravelMateJoinStatus.PENDING,
+          },
+          {
+            $set: {
+              joinStatus: TravelMateJoinStatus.APPROVED,
+            },
+          },
+          {
+            new: true,
+            runValidators: true,
+            session,
+          },
+        );
+
+        if (!approvedJoin) {
+          throw new BadRequestException(Message.UPDATE_FAILED);
+        }
+      });
+
+      if (!approvedJoin) {
+        throw new BadRequestException(Message.UPDATE_FAILED);
+      }
+
+      // Transaction muvaffaqiyatli tugagandan KEYIN notification
+      await this.notificationService.createNotification({
+        receiverId: approvedJoin.memberId,
+        senderId: memberId,
+
+        notificationType: NotificationType.TRAVEL_MATE_JOIN_APPROVED,
+
+        notificationTitle: 'Join request approved',
+
+        notificationMessage: 'Your travel mate join request has been approved.',
+
+        referenceType: NotificationReferenceType.TRAVEL_MATE_POST,
+
+        referenceId: approvedJoin.travelMatePostId,
+      });
+
+      return approvedJoin;
+    } finally {
+      await session.endSession();
     }
-
-    const targetPost = await this.travelMatePostModel.findOne({
-      _id: targetJoin.travelMatePostId,
-      matePostStatus: TravelMatePostStatus.ACTIVE,
-    });
-
-    if (!targetPost) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
-
-    if (targetPost.memberId.toString() !== memberId.toString()) {
-      throw new ForbiddenException('Only the post owner can approve join requests.');
-    }
-
-    if (targetPost.currentMembers >= targetPost.maxMembers) {
-      throw new BadRequestException('Travel mate group is already full.');
-    }
-
-    const approvedJoin = await this.travelMateJoinModel.findOneAndUpdate(
-      {
-        _id: joinId,
-        joinStatus: TravelMateJoinStatus.PENDING,
-      },
-      {
-        $set: {
-          joinStatus: TravelMateJoinStatus.APPROVED,
-        },
-      },
-      {
-        new: true,
-        runValidators: true,
-      },
-    );
-
-    if (!approvedJoin) {
-      throw new BadRequestException(Message.UPDATE_FAILED);
-    }
-
-    await this.travelMatePostModel.findByIdAndUpdate(targetPost._id, {
-      $inc: {
-        currentMembers: 1,
-      },
-    });
-
-    await this.notificationService.createNotification({
-      receiverId: targetJoin.memberId,
-      senderId: memberId,
-
-      notificationType: NotificationType.TRAVEL_MATE_JOIN_APPROVED,
-
-      notificationTitle: 'Join request approved',
-
-      notificationMessage: 'Your travel mate join request has been approved.',
-
-      referenceType: NotificationReferenceType.TRAVEL_MATE_POST,
-
-      referenceId: targetPost._id,
-    });
-
-    return approvedJoin;
   }
 
   public async rejectTravelMateJoin(memberId: ObjectId, joinId: ObjectId): Promise<TravelMateJoin> {
