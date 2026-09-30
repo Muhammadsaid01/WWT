@@ -144,6 +144,10 @@ export class PricesRange {
 @InputType()
 class TPISearch {
   @IsOptional()
+  @Field(() => String, { nullable: true })
+  agentId?: string;
+
+  @IsOptional()
   @IsEnum(PackageStatus)
   @Field(() => PackageStatus, { nullable: true })
   packageStatus?: PackageStatus;

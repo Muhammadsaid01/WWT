@@ -24,6 +24,7 @@ import {
   DeletePackagePolicyInput,
   PackagePolicyInput,
 } from '../../libs/dto/travel-package/package-policy.input';
+import { PackagePolicyUpdate } from '../../libs/dto/travel-package/package-policy.update';
 import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
 import {
   DeletePackageScheduleInput,
@@ -497,7 +498,7 @@ export class TravelPackageResolver {
     @Args('input') input: DeletePackageExcludeInput,
     @AuthMember('_id') memberId: ObjectId,
   ): Promise<PackageExclude> {
-    console.log('Mutation: deletePackageInclude');
+    console.log('Mutation: deletePackageExclude');
     input._id = shapeIntoMongoObjectId(input._id);
     return this.travelService.deletePackageExclude(memberId, input);
   }
@@ -573,12 +574,28 @@ export class TravelPackageResolver {
     @Args('input') input: PackagePolicyInput,
     @AuthMember('_id') memberId: ObjectId,
   ): Promise<PackagePolicy> {
-    console.log('Mutation: createPackageTag');
+    console.log('Mutation: createPackagePolicy');
     console.log('memberId:', memberId);
 
     input.packageId = shapeIntoMongoObjectId(input.packageId);
     return this.travelService.createPackagePolicy(memberId, input);
   }
+
+  @Roles(MemberType.AGENT)
+  @UseGuards(RolesGuard)
+  @Mutation(() => PackagePolicy)
+  public async updatePackagePolicy(
+    @Args('policyId', { type: () => String }) policyId: string,
+    @Args('input') input: PackagePolicyUpdate,
+    @AuthMember('_id') memberId: ObjectId,
+  ): Promise<PackagePolicy> {
+    return this.travelService.updatePackagePolicy(
+      memberId,
+      shapeIntoMongoObjectId(policyId),
+      input,
+    );
+  }
+
   @Roles(MemberType.AGENT)
   @UseGuards(RolesGuard)
   @Mutation(() => PackagePolicy)
@@ -586,7 +603,7 @@ export class TravelPackageResolver {
     @Args('input') input: DeletePackagePolicyInput,
     @AuthMember('_id') memberId: ObjectId,
   ): Promise<PackagePolicy> {
-    console.log('Mutation: deletePackageTag');
+    console.log('Mutation: deletePackagePolicy');
     input._id = shapeIntoMongoObjectId(input._id);
     return this.travelService.deletePackagePolicy(memberId, input);
   }
@@ -598,7 +615,7 @@ export class TravelPackageResolver {
     @Args('packageId', { type: () => String })
     packageId: string,
   ): Promise<PackagePolicy[]> {
-    console.log('Query: getPackageTags');
+    console.log('Query: getPackagePolicies');
     const targetId = shapeIntoMongoObjectId(packageId);
     return this.travelService.getPackagePolicy(targetId);
   }
@@ -609,7 +626,7 @@ export class TravelPackageResolver {
   public async getAllPackagePoliciesByAdmin(
     @Args('packageId') packageId: string,
   ): Promise<PackagePolicy[]> {
-    console.log('Query: getAllPackageTagsByAdmin');
+    console.log('Query: getAllPackagePoliciesByAdmin');
     const targetId = shapeIntoMongoObjectId(packageId);
     return this.travelService.getAllPackagePoliciesByAdmin(targetId);
   }

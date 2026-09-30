@@ -9,7 +9,12 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import moment from 'moment';
 import { FilterQuery, Model, ObjectId } from 'mongoose';
-import { lookupAgent, lookupAuthMemberLiked, unwindAgent } from '../../libs/config';
+import {
+  lookupAgent,
+  lookupAuthMemberLiked,
+  shapeIntoMongoObjectId,
+  unwindAgent,
+} from '../../libs/config';
 import { LikeInput } from '../../libs/dto/community/like.input';
 import { ViewInput } from '../../libs/dto/community/view.input';
 import { Itinerary } from '../../libs/dto/travel-package/itinerary';
@@ -33,6 +38,7 @@ import {
   DeletePackagePolicyInput,
   PackagePolicyInput,
 } from '../../libs/dto/travel-package/package-policy.input';
+import { PackagePolicyUpdate } from '../../libs/dto/travel-package/package-policy.update';
 import { PackageSchedule } from '../../libs/dto/travel-package/package-schedule';
 import {
   DeletePackageScheduleInput,
@@ -404,6 +410,7 @@ export class TravelPackageService {
     if (!search) return;
 
     const {
+      agentId,
       packageCategory,
       destinationCountry,
       destinationCity,
@@ -411,6 +418,10 @@ export class TravelPackageService {
       periodsRange,
       text,
     } = search;
+
+    if (agentId) {
+      match.agentId = shapeIntoMongoObjectId(agentId);
+    }
 
     if (packageCategory) {
       match.packageCategory = packageCategory;
@@ -454,7 +465,6 @@ export class TravelPackageService {
       ];
     }
   }
-
   public async getFavorities(memberId: ObjectId, input: OrdinaryInquiry): Promise<TravelPackages> {
     return await this.likeService.getFavoritePackages(memberId, input);
   }
@@ -1246,6 +1256,45 @@ export class TravelPackageService {
 
     // 4. PackageInclude yaratamiz
     const result = await this.packagePolicyModel.create(input);
+
+    return result;
+  }
+
+  public async updatePackagePolicy(
+    memberId: ObjectId,
+    policyId: ObjectId,
+    input: PackagePolicyUpdate,
+  ): Promise<PackagePolicy> {
+    const agent = await this.agentService.findAgentByMemberId(memberId);
+
+    const targetPolicy = await this.packagePolicyModel.findById(policyId);
+
+    if (!targetPolicy) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    const targetPackage = await this.packageModel.findById(targetPolicy.packageId);
+
+    if (!targetPackage) {
+      throw new BadRequestException(Message.NO_DATA_FOUND);
+    }
+
+    if (String(targetPackage.agentId) !== String(agent._id)) {
+      throw new ForbiddenException(Message.NOT_AUTHORIZED);
+    }
+
+    const result = await this.packagePolicyModel.findByIdAndUpdate(
+      policyId,
+      { $set: input },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!result) {
+      throw new BadRequestException(Message.UPDATE_FAILED);
+    }
 
     return result;
   }

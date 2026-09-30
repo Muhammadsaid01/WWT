@@ -8,6 +8,7 @@ import { PaymentInput, UpdatePaymentStatusInput } from '../../libs/dto/booking/p
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { PaymentService } from './payment.service';
 
@@ -15,8 +16,7 @@ import { PaymentService } from './payment.service';
 export class PaymentResolver {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Mutation(() => Payment)
   public async createPayment(
     @AuthMember('_id') memberId: ObjectId,
@@ -29,8 +29,7 @@ export class PaymentResolver {
     return await this.paymentService.createPayment(targetMemberId, input);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Query(() => [Payment])
   public async getMyPayments(@AuthMember('_id') memberId: ObjectId): Promise<Payment[]> {
     console.log('Query: getMyPayments');
@@ -40,8 +39,7 @@ export class PaymentResolver {
     return await this.paymentService.getMyPayments(targetMemberId);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Query(() => Payment)
   public async getMyPayment(
     @AuthMember('_id') memberId: ObjectId,

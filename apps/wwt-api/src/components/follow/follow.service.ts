@@ -33,12 +33,12 @@ export class FollowService {
 
     await this.memberService.memberStatsEditor({
       _id: followerId,
-      targetKey: 'memberFollowings',
+      targetKey: 'memberFollowingCount',
       modifier: 1,
     });
     await this.memberService.memberStatsEditor({
       _id: followingId,
-      targetKey: 'memberFollowers',
+      targetKey: 'memberFollowerCount',
       modifier: 1,
     });
 
@@ -89,12 +89,12 @@ export class FollowService {
 
     await this.memberService.memberStatsEditor({
       _id: followerId,
-      targetKey: 'memberFollowings',
+      targetKey: 'memberFollowingCount',
       modifier: -1,
     });
     await this.memberService.memberStatsEditor({
       _id: followingId,
-      targetKey: 'memberFollowers',
+      targetKey: 'memberFollowerCount',
       modifier: -1,
     });
 

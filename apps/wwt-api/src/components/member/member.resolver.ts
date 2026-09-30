@@ -78,7 +78,6 @@ export class MemberResolver {
   }
 
   @UseGuards(AuthGuard)
-  @UseGuards(RolesGuard)
   @Query(() => Member)
   public async getMyProfile(@AuthMember('_id') memberId: ObjectId): Promise<Member> {
     console.log('Query getMyProfile');
@@ -86,8 +85,7 @@ export class MemberResolver {
     return this.memberService.getMyProfile(memberId);
   }
 
-  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Mutation(() => Member)
   public async deleteMember(@AuthMember('_id') memberId: ObjectId): Promise<Member> {
     console.log('Mutation deleteMember');

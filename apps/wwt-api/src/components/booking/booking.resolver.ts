@@ -35,8 +35,7 @@ export class BookingResolver {
     return await this.bookingService.createBooking(memberId, input);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Mutation(() => Booking)
   public async cancelBooking(
     @AuthMember('_id') memberId: ObjectId,
@@ -49,8 +48,7 @@ export class BookingResolver {
     return await this.bookingService.cancelBooking(memberId, targetBookingId);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Query(() => Bookings)
   public async getMyBookings(
     @AuthMember('_id') memberId: ObjectId,
@@ -63,8 +61,7 @@ export class BookingResolver {
     return await this.bookingService.getMyBookings(targetMemberId, input);
   }
 
-  @Roles(MemberType.USER)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard)
   @Query(() => Booking)
   public async getMyBooking(
     @AuthMember('_id') memberId: ObjectId,

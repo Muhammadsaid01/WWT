@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId } from 'mongoose';
+import { Model, ObjectId, PipelineStage } from 'mongoose';
+import { lookupUsageMember, unwindUsageMember } from '../../libs/config';
 import { Agent, Agents } from '../../libs/dto/agent/agent';
 import { AgentsInquiry } from '../../libs/dto/agent/agent.input';
 import { AgentUpdate, UpdateAgentByAdmin } from '../../libs/dto/agent/agent.update';
@@ -73,32 +74,46 @@ export class AgentService {
   }
 
   public async getAgents(input: AgentsInquiry): Promise<Agents> {
-    console.log(input);
-    const { page, limit } = input;
+    const { page, limit, search, sort, direction } = input;
+    const match: T = { agentStatus: AgentStatus.ACTIVE };
+    if (search?.verificationStatus) match.verificationStatus = search.verificationStatus;
 
-    const match: T = {
-      agentStatus: AgentStatus.ACTIVE,
-    };
-
-    const result = await this.agentModel
-      .find(match)
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean()
-      .exec();
-
-    for (const agent of result) {
-      const memberData = await this.memberModel.findById(agent.memberId).lean().exec();
-
-      agent.memberData = memberData;
+    const allowedSorts = ['agentRank', 'agentRating', 'agentReviewCount', 'createdAt'];
+    const sortField = sort && allowedSorts.includes(sort) ? sort : 'agentRank';
+    const sortOrder = direction === Direction.ASC ? 1 : -1;
+    const pipeline: PipelineStage[] = [{ $match: match }, lookupUsageMember, unwindUsageMember];
+    const text = search?.text?.trim();
+    if (text) {
+      // Treat search as literal text, not a user-supplied regular expression.
+      const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const fields = [
+        'companyName',
+        'agentDesc',
+        'officeAddress',
+        'companyEmail',
+        'memberData.memberFullName',
+        'memberData.memberNick',
+        'memberData.memberCountry',
+        'memberData.memberCity',
+      ];
+      pipeline.push({
+        $match: {
+          $or: fields.map((field) => ({ [field]: { $regex: escaped, $options: 'i' } })),
+        },
+      });
     }
-
-    const total = await this.agentModel.countDocuments(match);
-
-    return {
-      list: result as Agent[],
-      metaCounter: [{ total }],
-    };
+    pipeline.push(
+      // A unique tie-breaker keeps equal ranks/ratings stable across pages.
+      { $sort: { [sortField]: sortOrder, _id: sortOrder } },
+      {
+        $facet: {
+          list: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+          metaCounter: [{ $count: 'total' }],
+        },
+      },
+    );
+    const [result] = await this.agentModel.aggregate<Agents>(pipeline).exec();
+    return result ?? { list: [], metaCounter: [] };
   }
 
   public async updateAgent(memberId: ObjectId, input: AgentUpdate): Promise<Agent> {
