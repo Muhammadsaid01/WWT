@@ -343,7 +343,14 @@ export class BookingService {
       bookingDeletedAt: null,
     };
 
-    return await this.bookingPagination(match, input);
+    // Ownership comes from the authenticated agent, never from inquiry filters.
+    // Copy the inquiry so admin/general callers can still filter by agentId.
+    const agentInput: BookingsInquiry = {
+      ...input,
+      search: { ...input.search, agentId: undefined },
+    };
+
+    return await this.bookingPagination(match, agentInput);
   }
 
   public async getBookingByAgent(memberId: ObjectId, bookingId: ObjectId): Promise<Booking> {
