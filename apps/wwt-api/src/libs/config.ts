@@ -178,6 +178,15 @@ export const lookupBoardArticleMember = {
   },
 };
 
+export const lookupCommentMember = {
+  $lookup: {
+    from: 'members',
+    localField: 'memberId',
+    foreignField: '_id',
+    as: 'memberData',
+  },
+};
+
 export const unwindMember = {
   $unwind: {
     path: '$memberData',

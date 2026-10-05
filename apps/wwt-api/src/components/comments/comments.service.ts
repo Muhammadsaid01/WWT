@@ -4,7 +4,7 @@ import { Model, ObjectId } from 'mongoose';
 import {
   lookupAuthMemberLiked,
   lookupCommentArticle,
-  lookupMember,
+  lookupCommentMember,
   shapeIntoMongoObjectId,
 } from '../../libs/config';
 import { CommentEntity, Comments } from '../../libs/dto/community/comment';
@@ -132,7 +132,7 @@ export class CommentsService {
               $limit: input.limit,
             },
             lookupAuthMemberLiked(memberId),
-            lookupMember,
+            lookupCommentMember,
 
             {
               $unwind: {
@@ -166,7 +166,7 @@ export class CommentsService {
         },
       },
 
-      lookupMember,
+      lookupCommentMember,
 
       {
         $unwind: {
@@ -288,7 +288,7 @@ export class CommentsService {
               $limit: input.limit,
             },
 
-            lookupMember,
+            lookupCommentMember,
 
             {
               $unwind: {
