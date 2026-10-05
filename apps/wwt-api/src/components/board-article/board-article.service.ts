@@ -334,15 +334,10 @@ export class BoardArticleService {
 
     /*
      * Like moduli tayyor bo‘lgach qo‘shamiz:
-     *
-     * if (memberId) {
-     *   listPipeline.splice(
-     *     3,
-     *     0,
-     *     lookupAuthMemberLiked(memberId),
-     *   );
-     * }
      */
+    if (memberId) {
+      listPipeline.splice(3, 0, lookupAuthMemberLiked(memberId));
+    }
 
     const result = await this.boardArticleModel
       .aggregate([
