@@ -14,7 +14,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new LoggingInterceptor());
   app.enableCors({ origin: true, credentials: true });
 
-  app.use(graphqlUploadExpress({ maxFileSize: 15000000, maxFile: 10 }));
+  app.use(graphqlUploadExpress({ maxFileSize: 15000000, maxFiles: 10 }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   app.useWebSocketAdapter(new WsAdapter(app));
   await app.listen(process.env.PORT_API ?? 3007);

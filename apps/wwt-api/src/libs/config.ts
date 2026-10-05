@@ -169,6 +169,15 @@ export const lookupMember = {
   },
 };
 
+export const lookupBoardArticleMember = {
+  $lookup: {
+    from: 'members',
+    localField: 'memberId',
+    foreignField: '_id',
+    as: 'memberData',
+  },
+};
+
 export const unwindMember = {
   $unwind: {
     path: '$memberData',

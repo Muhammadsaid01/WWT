@@ -7,7 +7,11 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
-import { lookupAuthMemberLiked, lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
+import {
+  lookupAuthMemberLiked,
+  lookupBoardArticleMember,
+  shapeIntoMongoObjectId,
+} from '../../libs/config';
 import { BoardArticle, BoardArticles } from '../../libs/dto/community/board-acticle';
 // eslint-disable-next-line prettier/prettier
 import {
@@ -65,11 +69,22 @@ export class BoardArticleService {
     memberId: ObjectId | null,
     articleId: ObjectId,
   ): Promise<BoardArticle> {
-    const targetBoardArticle = await this.boardArticleModel.findOne({
-      _id: articleId,
-      articleStatus: ArticleStatus.ACTIVE,
-      articleDeletedAt: null,
-    });
+    const [targetBoardArticle] = await this.boardArticleModel.aggregate([
+      {
+        $match: {
+          _id: articleId,
+          articleStatus: ArticleStatus.ACTIVE,
+          articleDeletedAt: null,
+        },
+      },
+      lookupBoardArticleMember,
+      {
+        $unwind: {
+          path: '$memberData',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+    ]);
 
     if (!targetBoardArticle) {
       throw new BadRequestException(Message.NO_DATA_FOUND);
@@ -102,11 +117,6 @@ export class BoardArticleService {
 
       targetBoardArticle.meLiked = await this.likeService.checkLikeExistence(likeInput);
     }
-
-    targetBoardArticle.memberData = await this.memberService.getMember(
-      null,
-      targetBoardArticle.memberId,
-    );
 
     return targetBoardArticle;
   }
@@ -312,7 +322,7 @@ export class BoardArticleService {
         $limit: input.limit,
       },
       lookupAuthMemberLiked(memberId),
-      lookupMember,
+      lookupBoardArticleMember,
 
       {
         $unwind: {
@@ -428,7 +438,7 @@ export class BoardArticleService {
               $limit: input.limit,
             },
 
-            lookupMember,
+            lookupBoardArticleMember,
 
             {
               $unwind: {
@@ -549,7 +559,7 @@ export class BoardArticleService {
                 $limit: input.limit,
               },
 
-              lookupMember,
+              lookupBoardArticleMember,
 
               {
                 $unwind: {
@@ -582,7 +592,7 @@ export class BoardArticleService {
         },
       },
 
-      lookupMember,
+      lookupBoardArticleMember,
 
       {
         $unwind: {

@@ -1,6 +1,7 @@
 import { BadRequestException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { createWriteStream } from 'fs';
+import { mkdir } from 'fs/promises';
 import GraphQLUpload from 'graphql-upload/GraphQLUpload.mjs';
 import type { FileUpload } from 'graphql-upload/processRequest.mjs';
 import { ObjectId } from 'mongoose';
@@ -16,6 +17,16 @@ import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { WithoutGuard } from '../auth/guards/without.guard';
 import { MemberService } from './member.service';
+
+const imageUploadTargets = new Set(['member', 'package', 'article', 'others']);
+
+function imageUploadDirectory(target: string): string {
+  if (!imageUploadTargets.has(target)) {
+    throw new BadRequestException('Unsupported image upload target.');
+  }
+
+  return `uploads/${target}`;
+}
 
 @Resolver()
 export class MemberResolver {
@@ -149,6 +160,9 @@ export class MemberResolver {
   ): Promise<string> {
     console.log('Mutation: imageUploader');
 
+    const uploadDirectory = imageUploadDirectory(target);
+    await mkdir(uploadDirectory, { recursive: true });
+
     // GraphQLUpload runtime'da Promise<FileUpload> bo'lishi mumkin
     const file = await Promise.resolve(upload);
 
@@ -170,7 +184,7 @@ export class MemberResolver {
     }
 
     const imageName = getSerialForImage(filename);
-    const url = `uploads/${target}/${imageName}`;
+    const url = `${uploadDirectory}/${imageName}`;
 
     const stream = createReadStream();
 
@@ -196,6 +210,9 @@ export class MemberResolver {
   ): Promise<string[]> {
     console.log('Mutation: imagesUploader');
 
+    const uploadDirectory = imageUploadDirectory(target);
+    await mkdir(uploadDirectory, { recursive: true });
+
     const uploadedImages = await Promise.all(
       files.map(async (img) => {
         // Runtime'da img Promise<FileUpload>
@@ -220,7 +237,7 @@ export class MemberResolver {
 
         const imageName = getSerialForImage(filename);
 
-        const url = `uploads/${target}/${imageName}`;
+        const url = `${uploadDirectory}/${imageName}`;
 
         const stream = createReadStream();
 
