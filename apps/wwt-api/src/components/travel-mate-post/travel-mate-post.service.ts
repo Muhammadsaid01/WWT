@@ -154,17 +154,18 @@ export class TravelMatePostService {
     input: TravelMatePostUpdate,
   ): Promise<TravelMatePost> {
     const { _id } = input;
+    const match: T = {
+      _id,
+      memberId,
+      matePostStatus: TravelMatePostStatus.ACTIVE,
+    };
+
+    if (input.maxMembers !== undefined) {
+      match.currentMembers = { $lte: input.maxMembers };
+    }
 
     const result = await this.travelMatePostModel
-      .findOneAndUpdate(
-        {
-          _id,
-          memberId,
-          matePostStatus: TravelMatePostStatus.ACTIVE,
-        },
-        input,
-        { new: true },
-      )
+      .findOneAndUpdate(match, input, { new: true })
       .exec();
 
     if (!result) {

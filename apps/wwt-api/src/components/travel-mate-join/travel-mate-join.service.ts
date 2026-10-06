@@ -269,32 +269,62 @@ export class TravelMateJoinService {
   }
 
   public async leaveTravelMate(memberId: ObjectId, joinId: ObjectId): Promise<TravelMateJoin> {
-    const targetJoin = await this.travelMateJoinModel
-      .findOne({
-        _id: joinId,
-        memberId,
-      })
-      .exec();
+    const session = await this.travelMatePostModel.db.startSession();
+    let removedJoin: TravelMateJoin | null = null;
 
-    if (!targetJoin) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
+    try {
+      await session.withTransaction(async () => {
+        const targetJoin = await this.travelMateJoinModel
+          .findOne({
+            _id: joinId,
+            memberId,
+          })
+          .session(session);
 
-    const result = await this.travelMateJoinModel.findByIdAndDelete(joinId).exec();
+        if (!targetJoin) {
+          throw new BadRequestException(Message.NO_DATA_FOUND);
+        }
 
-    if (!result) {
-      throw new BadRequestException(Message.DELETE_FAILED);
-    }
+        removedJoin = await this.travelMateJoinModel.findOneAndDelete(
+          {
+            _id: joinId,
+            memberId,
+          },
+          { session },
+        );
 
-    if (targetJoin.joinStatus === TravelMateJoinStatus.APPROVED) {
-      await this.travelMatePostModel.findByIdAndUpdate(targetJoin.travelMatePostId, {
-        $inc: {
-          currentMembers: -1,
-        },
+        if (!removedJoin) {
+          throw new BadRequestException(Message.DELETE_FAILED);
+        }
+
+        if (targetJoin.joinStatus === TravelMateJoinStatus.APPROVED) {
+          const updatedPost = await this.travelMatePostModel.findOneAndUpdate(
+            {
+              _id: targetJoin.travelMatePostId,
+              currentMembers: { $gt: 1 },
+            },
+            {
+              $inc: {
+                currentMembers: -1,
+              },
+            },
+            { new: true, session },
+          );
+
+          if (!updatedPost) {
+            throw new BadRequestException(Message.UPDATE_FAILED);
+          }
+        }
       });
-    }
 
-    return result;
+      if (!removedJoin) {
+        throw new BadRequestException(Message.DELETE_FAILED);
+      }
+
+      return removedJoin;
+    } finally {
+      await session.endSession();
+    }
   }
 
   public async getTravelMateParticipants(input: TravelMateJoinsInquiry): Promise<TravelMateJoins> {
