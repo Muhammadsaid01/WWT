@@ -59,6 +59,16 @@ const AgentRequestSchema = new Schema(
 );
 
 AgentRequestSchema.index({ memberId: 1 });
+AgentRequestSchema.index(
+  { memberId: 1, requestStatus: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      requestStatus: AgentRequestStatus.PENDING,
+    },
+    name: 'unique_pending_agent_request_per_member',
+  },
+);
 AgentRequestSchema.index({ requestStatus: 1 });
 AgentRequestSchema.index({ reviewedBy: 1 });
 

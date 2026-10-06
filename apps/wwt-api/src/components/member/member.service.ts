@@ -153,13 +153,43 @@ export class MemberService {
   }
 
   public async updateMember(memberId: ObjectId, input: MemberUpdate): Promise<Member> {
+    // Keep privilege and account-state fields out even if this service is called
+    // directly with an object that did not pass through the GraphQL input type.
+    const updateData = {
+      ...(input.memberFullName !== undefined && {
+        memberFullName: input.memberFullName,
+      }),
+      ...(input.memberAddress !== undefined && {
+        memberAddress: input.memberAddress,
+      }),
+      ...(input.memberCountry !== undefined && {
+        memberCountry: input.memberCountry,
+      }),
+      ...(input.memberCity !== undefined && { memberCity: input.memberCity }),
+      ...(input.memberDesc !== undefined && { memberDesc: input.memberDesc }),
+      ...(input.memberPhone !== undefined && {
+        memberPhone: input.memberPhone,
+      }),
+      ...(input.memberEmail !== undefined && {
+        memberEmail: input.memberEmail,
+      }),
+      ...(input.memberImage !== undefined && {
+        memberImage: input.memberImage,
+      }),
+      ...(input.memberLanguage !== undefined && {
+        memberLanguage: input.memberLanguage,
+      }),
+    };
+
     const result = await this.memberModel
       .findOneAndUpdate(
         {
           _id: memberId,
           memberStatus: MemberStatus.ACTIVE,
         },
-        input,
+        {
+          $set: updateData,
+        },
         { new: true },
       )
       .exec();
@@ -331,6 +361,24 @@ export class MemberService {
   }
   public async updateMemberByAdmin(input: MemberUpdateByAdmin): Promise<Member> {
     const { memberId, ...updateData } = input;
+
+    if (updateData.memberType === MemberType.AGENT) {
+      const currentMember = await this.memberModel
+        .findById(memberId)
+        .select('memberType')
+        .lean()
+        .exec();
+
+      if (!currentMember) {
+        throw new NotFoundException(Message.NO_DATA_FOUND);
+      }
+
+      if (currentMember.memberType !== MemberType.AGENT) {
+        throw new BadRequestException(
+          'USER to AGENT promotion must be completed through Agent Request approval.',
+        );
+      }
+    }
 
     const updatedMember = await this.memberModel
       .findByIdAndUpdate(

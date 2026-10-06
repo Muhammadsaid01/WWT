@@ -109,7 +109,6 @@ const AgentSchema = new Schema(
   { timestamps: true, collection: 'agents' },
 );
 
-AgentSchema.index({ memberId: 1 });
 AgentSchema.index({ agentStatus: 1 });
 AgentSchema.index({ verificationStatus: 1 });
 AgentSchema.index({ agentRank: -1 });

@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 import { AgentRequestStatus } from '../../enums/agent-request.enum';
 import { Direction } from '../../enums/common.enum';
 
@@ -59,6 +59,7 @@ export class AgentRequestsInquiry {
 
   @IsNotEmpty()
   @Min(1)
+  @Max(100)
   @Field(() => Int)
   limit: number;
 
