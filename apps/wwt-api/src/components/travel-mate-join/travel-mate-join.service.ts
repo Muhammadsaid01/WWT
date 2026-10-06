@@ -1,7 +1,12 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
-import { lookupMember, lookupTravelMatePost, shapeIntoMongoObjectId } from '../../libs/config';
+import {
+  lookupMember,
+  lookupTravelMateMember,
+  lookupTravelMatePost,
+  shapeIntoMongoObjectId,
+} from '../../libs/config';
 import { TravelMatePost } from '../../libs/dto/community/travel-mate';
 import { TravelMateJoin, TravelMateJoins } from '../../libs/dto/community/travel-mate-join';
 // eslint-disable-next-line prettier/prettier
@@ -321,7 +326,7 @@ export class TravelMateJoinService {
               $limit: input.limit,
             },
 
-            lookupMember,
+            lookupTravelMateMember,
 
             {
               $unwind: {

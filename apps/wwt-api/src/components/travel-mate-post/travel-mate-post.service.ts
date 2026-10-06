@@ -79,10 +79,16 @@ export class TravelMatePostService {
     memberId: ObjectId | null,
     post: ObjectId,
   ): Promise<TravelMatePost> {
-    const targetPost = await this.travelMatePostModel.findOne({
-      _id: post,
-      matePostStatus: TravelMatePostStatus.ACTIVE,
-    });
+    const [targetPost] = await this.travelMatePostModel.aggregate([
+      {
+        $match: {
+          _id: post,
+          matePostStatus: TravelMatePostStatus.ACTIVE,
+        },
+      },
+      lookupTravelMateMember,
+      unwindTravelMateMember,
+    ]);
 
     if (!targetPost) {
       throw new BadRequestException(Message.NO_DATA_FOUND);
@@ -107,9 +113,6 @@ export class TravelMatePostService {
         targetPost.matePostViewCount++;
       }
     }
-
-    targetPost.memberData = await this.memberService.getMember(null, targetPost.memberId);
-
     return targetPost;
   }
 

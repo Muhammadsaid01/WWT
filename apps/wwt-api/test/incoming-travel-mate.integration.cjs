@@ -69,6 +69,15 @@ async function main() {
     assert(owned.list.every((item) => item.travelMatePostData.memberId.equals(owner)));
     assert(owned.list.every((item) => item.memberData._id.equals(item.memberId)));
     console.log('PASS owner requests and both member/post lookups');
+    const participants = await resolver.getTravelMateParticipants({
+      page: 1,
+      limit: 10,
+      search: { travelMatePostId: String(trip) },
+    });
+    assert.equal(total(participants), 1);
+    assert.equal(participants.list[0].joinStatus, 'APPROVED');
+    assert(participants.list[0].memberData._id.equals(participants.list[0].memberId));
+    console.log('PASS approved participant member lookup uses TravelMateJoin.memberId');
     const other = await query(otherOwner);
     assert.equal(total(other), 1);
     assert(other.list.every((item) => !item.travelMatePostId.equals(trip)));
