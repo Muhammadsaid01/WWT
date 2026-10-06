@@ -507,63 +507,112 @@ export class TravelPackageService {
   }
 
   public async updateTravelPackageByAdmin(input: TravelPackageUpdate): Promise<TravelPackage> {
-    let { soldAt, deletedAt } = input;
+    return await this.packageModel.db.transaction(async (session) => {
+      const targetPackage = await this.packageModel.findById(input._id).session(session).exec();
 
-    const { packageStatus } = input;
+      if (!targetPackage) {
+        throw new BadRequestException(Message.NO_DATA_FOUND);
+      }
 
-    const search: T = {
-      _id: input._id,
-      packageStatus: PackageStatus.ACTIVE,
-    };
-    if (packageStatus === PackageStatus.SOLD) soldAt = moment().toDate();
-    else if (packageStatus === PackageStatus.DELETED) deletedAt = moment().toDate();
-    const result = await this.packageModel
-      .findOneAndUpdate(search, input, {
-        new: true,
-      })
-      .exec();
-    if (!result) throw new BadRequestException(Message.UPDATE_FAILED);
+      if (targetPackage.packageStatus !== PackageStatus.ACTIVE) {
+        throw new BadRequestException('Only ACTIVE packages can be updated.');
+      }
 
-    if (soldAt || deletedAt) {
-      await this.agentService.agentStatsEditor({
-        _id: result.agentId,
-        targetKey: 'agentPackageCount',
-        modifier: -1,
-      });
-    }
+      const updateData: Partial<TravelPackageUpdate> = { ...input };
+      delete updateData._id;
+      delete updateData.soldAt;
+      delete updateData.deletedAt;
 
-    return result;
+      for (const key of Object.keys(updateData) as (keyof TravelPackageUpdate)[]) {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      }
+
+      const nextStatus = input.packageStatus ?? targetPackage.packageStatus;
+      const statusChanged = nextStatus !== targetPackage.packageStatus;
+
+      if (statusChanged && nextStatus === PackageStatus.SOLD) {
+        updateData.soldAt = new Date();
+      } else if (statusChanged && nextStatus === PackageStatus.DELETED) {
+        updateData.deletedAt = new Date();
+      }
+
+      const result = await this.packageModel
+        .findOneAndUpdate(
+          {
+            _id: input._id,
+            packageStatus: targetPackage.packageStatus,
+          },
+          { $set: updateData },
+          {
+            new: true,
+            runValidators: true,
+            session,
+          },
+        )
+        .exec();
+
+      if (!result) {
+        throw new BadRequestException(Message.UPDATE_FAILED);
+      }
+
+      if (
+        statusChanged &&
+        this.packageContributesToAgentCount(targetPackage.packageStatus) &&
+        !this.packageContributesToAgentCount(nextStatus)
+      ) {
+        await this.agentService.agentStatsEditor(
+          {
+            _id: result.agentId,
+            targetKey: 'agentPackageCount',
+            modifier: -1,
+          },
+          session,
+        );
+      }
+
+      return result;
+    });
   }
 
   public async deleteTravelPackageByAdmin(packageId: ObjectId): Promise<TravelPackage> {
-    const targetPackage = await this.packageModel.findById(packageId);
+    return await this.packageModel.db.transaction(async (session) => {
+      const targetPackage = await this.packageModel.findById(packageId).session(session).exec();
 
-    if (!targetPackage) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
+      if (!targetPackage) {
+        throw new BadRequestException(Message.NO_DATA_FOUND);
+      }
 
-    await Promise.all([
-      this.packageScheduleModel.deleteMany({ packageId }),
-      this.itineraryModel.deleteMany({ packageId }),
-      this.packageIncludeModel.deleteMany({ packageId }),
-      this.packageExcludeModel.deleteMany({ packageId }),
-      this.packageTagModel.deleteMany({ packageId }),
-      this.packagePolicyModel.deleteMany({ packageId }),
-    ]);
+      const deletedPackage = await this.packageModel.findOneAndDelete(
+        { _id: packageId },
+        { session },
+      );
 
-    const deletedPackage = await this.packageModel.findByIdAndDelete(packageId);
+      if (!deletedPackage) {
+        throw new BadRequestException(Message.NO_DATA_FOUND);
+      }
 
-    if (!deletedPackage) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
+      await this.packageScheduleModel.deleteMany({ packageId }, { session });
+      await this.itineraryModel.deleteMany({ packageId }, { session });
+      await this.packageIncludeModel.deleteMany({ packageId }, { session });
+      await this.packageExcludeModel.deleteMany({ packageId }, { session });
+      await this.packageTagModel.deleteMany({ packageId }, { session });
+      await this.packagePolicyModel.deleteMany({ packageId }, { session });
 
-    await this.agentService.agentStatsEditor({
-      _id: targetPackage.agentId,
-      targetKey: 'agentPackageCount',
-      modifier: -1,
+      if (this.packageContributesToAgentCount(targetPackage.packageStatus)) {
+        await this.agentService.agentStatsEditor(
+          {
+            _id: targetPackage.agentId,
+            targetKey: 'agentPackageCount',
+            modifier: -1,
+          },
+          session,
+        );
+      }
+
+      return deletedPackage;
     });
-
-    return deletedPackage;
   }
 
   //Schedule
@@ -1373,6 +1422,10 @@ export class TravelPackageService {
       .exec();
 
     return result;
+  }
+
+  private packageContributesToAgentCount(packageStatus: PackageStatus): boolean {
+    return ![PackageStatus.SOLD, PackageStatus.DELETED].includes(packageStatus);
   }
 
   private generateSlug(title: string): string {

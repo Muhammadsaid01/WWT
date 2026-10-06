@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId, PipelineStage } from 'mongoose';
+import { ClientSession, Model, ObjectId, PipelineStage } from 'mongoose';
 import { lookupUsageMember, unwindUsageMember } from '../../libs/config';
 import { Agent, Agents } from '../../libs/dto/agent/agent';
 import { AgentsInquiry } from '../../libs/dto/agent/agent.input';
@@ -234,15 +234,21 @@ export class AgentService {
     return agent;
   }
 
-  public async agentStatsEditor(input: StatisticModifier): Promise<Agent> {
+  public async agentStatsEditor(input: StatisticModifier, session?: ClientSession): Promise<Agent> {
     const { _id, targetKey, modifier } = input;
+    const match: T = { _id };
+
+    if (targetKey === 'agentPackageCount' && modifier < 0) {
+      match.agentPackageCount = { $gte: Math.abs(modifier) };
+    }
+
     const result = await this.agentModel
-      .findByIdAndUpdate(
-        _id,
+      .findOneAndUpdate(
+        match,
         {
           $inc: { [targetKey]: modifier },
         },
-        { new: true },
+        { new: true, session },
       )
       .exec();
     if (!result) {
