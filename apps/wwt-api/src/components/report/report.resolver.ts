@@ -1,6 +1,6 @@
-import { UseGuards } from '@nestjs/common';
+import { BadRequestException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { ObjectId } from 'mongoose';
+import { ObjectId, Types } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { ReportEntity, Reports } from '../../libs/dto/system/report';
 import {
@@ -53,7 +53,7 @@ export class ReportResolver {
   ): Promise<ReportEntity> {
     console.log('Query: getReport');
 
-    return this.reportService.getReport(memberId, memberType, shapeIntoMongoObjectId(reportId));
+    return this.reportService.getReport(memberId, memberType, this.parseObjectId(reportId));
   }
 
   @UseGuards(AuthGuard)
@@ -88,6 +88,14 @@ export class ReportResolver {
   ): Promise<ReportEntity> {
     console.log('Mutation: deleteReportByAdmin');
 
-    return this.reportService.deleteReportByAdmin(shapeIntoMongoObjectId(reportId));
+    return this.reportService.deleteReportByAdmin(this.parseObjectId(reportId));
+  }
+
+  private parseObjectId(value: string): ObjectId {
+    if (!Types.ObjectId.isValid(value)) {
+      throw new BadRequestException('Report ID must be a valid ObjectId.');
+    }
+
+    return shapeIntoMongoObjectId(value);
   }
 }

@@ -5,8 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId } from 'mongoose';
-import { shapeIntoMongoObjectId } from '../../libs/config';
+import { Model, ObjectId, Types, mongo } from 'mongoose';
 import { ReportEntity, Reports } from '../../libs/dto/system/report';
 import {
   ReportInput,
@@ -20,14 +19,45 @@ import { T } from '../../libs/types/common';
 
 @Injectable()
 export class ReportService {
+  private readonly statusTransitions: Record<ReportStatus, readonly ReportStatus[]> = {
+    [ReportStatus.PENDING]: [ReportStatus.REVIEWED, ReportStatus.REJECTED, ReportStatus.RESOLVED],
+    [ReportStatus.REVIEWED]: [ReportStatus.RESOLVED, ReportStatus.REJECTED],
+    [ReportStatus.REJECTED]: [],
+    [ReportStatus.RESOLVED]: [],
+  };
+
+  private readonly reportSortFields = new Set([
+    'createdAt',
+    'updatedAt',
+    'reviewedAt',
+    'reportStatus',
+    'targetType',
+    'reportType',
+  ]);
+
   constructor(
     @InjectModel('Report')
     private readonly reportModel: Model<ReportEntity>,
+
+    @InjectModel('Member')
+    private readonly memberModel: Model<{ _id: ObjectId }>,
+
+    @InjectModel('BoardArticle')
+    private readonly boardArticleModel: Model<{ _id: ObjectId }>,
+
+    @InjectModel('Comment')
+    private readonly commentModel: Model<{ _id: ObjectId }>,
+
+    @InjectModel('Review')
+    private readonly reviewModel: Model<{ _id: ObjectId }>,
+
+    @InjectModel('TravelMatePost')
+    private readonly travelMatePostModel: Model<{ _id: ObjectId }>,
   ) {}
 
   public async createReport(memberId: ObjectId, input: ReportInput): Promise<ReportEntity> {
     try {
-      const targetId = shapeIntoMongoObjectId(input.targetId);
+      const targetId = this.parseObjectId(input.targetId, 'Target ID');
 
       // Member o'zini report qila olmaydi
       if (
@@ -36,6 +66,8 @@ export class ReportService {
       ) {
         throw new BadRequestException('You cannot report yourself.');
       }
+
+      await this.assertTargetExists(targetId, input.targetType);
 
       // Oldin shu targetni report qilganmi?
       const existingReport = await this.reportModel.findOne({
@@ -63,6 +95,10 @@ export class ReportService {
       return result;
     } catch (error) {
       console.log('Error, Service createReport:', error);
+
+      if (error instanceof mongo.MongoServerError && error.code === 11000) {
+        throw new BadRequestException('You have already reported this target.');
+      }
 
       if (error instanceof HttpException) {
         throw error;
@@ -170,7 +206,7 @@ export class ReportService {
     adminId: ObjectId,
     input: UpdateReportStatusInput,
   ): Promise<ReportEntity> {
-    const reportId = shapeIntoMongoObjectId(input.reportId);
+    const reportId = this.parseObjectId(input.reportId, 'Report ID');
 
     const targetReport = await this.reportModel.findById(reportId);
 
@@ -180,6 +216,12 @@ export class ReportService {
 
     if (targetReport.reportStatus === input.reportStatus) {
       throw new BadRequestException(`Report status is already ${input.reportStatus}.`);
+    }
+
+    if (!this.statusTransitions[targetReport.reportStatus]?.includes(input.reportStatus)) {
+      throw new BadRequestException(
+        `Invalid report transition: ${targetReport.reportStatus} -> ${input.reportStatus}.`,
+      );
     }
 
     targetReport.reportStatus = input.reportStatus;
@@ -212,11 +254,11 @@ export class ReportService {
     const match: T = {};
 
     if (search.reporterId) {
-      match.reporterId = shapeIntoMongoObjectId(search.reporterId);
+      match.reporterId = this.parseObjectId(search.reporterId, 'Reporter ID');
     }
 
     if (search.targetId) {
-      match.targetId = shapeIntoMongoObjectId(search.targetId);
+      match.targetId = this.parseObjectId(search.targetId, 'Target ID');
     }
 
     if (search.targetType) {
@@ -227,13 +269,41 @@ export class ReportService {
       match.reportStatus = search.reportStatus;
     }
 
+    const requestedSort = input.sort ?? 'createdAt';
+    const sortField = this.reportSortFields.has(requestedSort) ? requestedSort : 'createdAt';
     const sort: T = {
-      [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
+      [sortField]: input.direction ?? Direction.DESC,
     };
 
     return {
       match,
       sort,
     };
+  }
+
+  private parseObjectId(value: string, label: string): ObjectId {
+    if (!Types.ObjectId.isValid(value)) {
+      throw new BadRequestException(`${label} must be a valid ObjectId.`);
+    }
+
+    return new Types.ObjectId(value) as unknown as ObjectId;
+  }
+
+  private async assertTargetExists(
+    targetId: ObjectId,
+    targetType: ReportTargetType,
+  ): Promise<void> {
+    const targetModels: Record<ReportTargetType, Model<{ _id: ObjectId }>> = {
+      [ReportTargetType.MEMBER]: this.memberModel,
+      [ReportTargetType.ARTICLE]: this.boardArticleModel,
+      [ReportTargetType.COMMENT]: this.commentModel,
+      [ReportTargetType.REVIEW]: this.reviewModel,
+      [ReportTargetType.TRAVEL_MATE_POST]: this.travelMatePostModel,
+    };
+
+    const target = await targetModels[targetType].findById(targetId).select('_id').lean().exec();
+    if (!target) {
+      throw new BadRequestException('The reported target does not exist.');
+    }
   }
 }
