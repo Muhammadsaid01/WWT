@@ -224,8 +224,10 @@ export class BookingService {
     // Never run external side effects in a retried transaction callback. A failure
     // here must not report a committed booking as failed and encourage duplicate retries.
     try {
+      const agentMemberId = await this.agentService.findAgentMemberId(createdBooking.agentId);
+
       await this.notificationService.createNotification({
-        receiverId: createdBooking.agentId,
+        receiverId: agentMemberId,
         senderId: memberId,
         notificationType: NotificationType.BOOKING_CREATED,
         notificationTitle: 'New booking',
@@ -278,8 +280,10 @@ export class BookingService {
 
     const updatedBooking = await targetBooking.save();
 
+    const agentMemberId = await this.agentService.findAgentMemberId(updatedBooking.agentId);
+
     await this.notificationService.createNotification({
-      receiverId: updatedBooking.agentId,
+      receiverId: agentMemberId,
       senderId: memberId,
 
       notificationType: NotificationType.BOOKING_CANCELLED,

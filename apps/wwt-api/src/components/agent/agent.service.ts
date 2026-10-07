@@ -273,4 +273,14 @@ export class AgentService {
 
     return agent;
   }
+
+  public async findAgentMemberId(agentId: ObjectId): Promise<ObjectId> {
+    const agent = await this.agentModel.findById(agentId).select('memberId').lean().exec();
+
+    if (!agent) {
+      throw new NotFoundException(Message.NO_DATA_FOUND);
+    }
+
+    return agent.memberId;
+  }
 }

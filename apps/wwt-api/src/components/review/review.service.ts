@@ -20,6 +20,7 @@ import { Direction, MemberPointAction, Message } from '../../libs/enums/common.e
 import { LikeTargetType } from '../../libs/enums/community.enum';
 import { NotificationReferenceType, NotificationType } from '../../libs/enums/notification.enum';
 import { PackageStatus } from '../../libs/enums/package.enum';
+import { AgentService } from '../agent/agent.service';
 import { BookingService } from '../booking/booking.service';
 import { LikesService } from '../likes/likes.service';
 import { MemberService } from '../member/member.service';
@@ -35,6 +36,8 @@ export class ReviewService {
     private readonly packageModel: Model<TravelPackage>,
 
     private readonly bookingService: BookingService,
+
+    private readonly agentService: AgentService,
 
     private readonly likeService: LikesService,
 
@@ -75,8 +78,10 @@ export class ReviewService {
 
     await this.recalculatePackageRating(booking.packageId);
 
+    const agentMemberId = await this.agentService.findAgentMemberId(booking.agentId);
+
     await this.notificationService.createNotification({
-      receiverId: booking.agentId,
+      receiverId: agentMemberId,
       senderId: memberId,
       notificationType: NotificationType.NEW_REVIEW,
       notificationTitle: 'New review received',
