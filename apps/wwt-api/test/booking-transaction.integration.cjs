@@ -96,6 +96,23 @@ async function main() {
       assert.equal(await Usage.countDocuments({ couponId: coupon._id }), 0);
       assert.equal((await Coupon.findById(coupon._id)).usedCount, 0);
     });
+    await test('same member can reuse a coupon on different bookings within per-user limit', async () => {
+      const a = await fixture(); const b = await fixture(); const c = await fixture(); const coupon = await couponFixture({ usageLimit: 0, perUserLimit: 2 });
+      const first = await service.createBooking(a.member._id, { ...a.input, couponCode: coupon.couponCode });
+      const second = await service.createBooking(a.member._id, { ...b.input, couponCode: coupon.couponCode });
+      assert.notEqual(String(first._id), String(second._id));
+      assert.equal(await Usage.countDocuments({ couponId: coupon._id, memberId: a.member._id }), 2);
+      assert.equal((await Coupon.findById(coupon._id)).usedCount, 2);
+      await assert.rejects(service.createBooking(a.member._id, { ...c.input, couponCode: coupon.couponCode }), /usage limit/);
+      assert.equal(await Usage.countDocuments({ couponId: coupon._id, memberId: a.member._id }), 2);
+      assert.equal((await Coupon.findById(coupon._id)).usedCount, 2);
+    });
+    await test('same coupon member and booking usage cannot be duplicated', async () => {
+      const f = await fixture(); const coupon = await couponFixture({ usageLimit: 0, perUserLimit: 2 });
+      const booking = await service.createBooking(f.member._id, { ...f.input, couponCode: coupon.couponCode });
+      await assert.rejects(Usage.create({ couponId: coupon._id, memberId: f.member._id, bookingId: booking._id, discountAmount: 5, usedAt: new Date() }), /duplicate key/);
+      assert.equal(await Usage.countDocuments({ couponId: coupon._id, memberId: f.member._id, bookingId: booking._id }), 1);
+    });
     await test('concurrent last seat cannot overbook', async () => {
       const f = await fixture({ seats: 1 }); const results = await Promise.allSettled([service.createBooking(f.member._id, f.input), service.createBooking(f.member._id, f.input)]);
       assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
