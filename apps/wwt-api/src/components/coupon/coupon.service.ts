@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { ClientSession, Model, ObjectId } from 'mongoose';
+import { ClientSession, Model, ObjectId, mongo } from 'mongoose';
 import {
   lookupUsageBooking,
   lookupUsageCoupon,
@@ -27,6 +27,26 @@ import { CouponUpdate } from '../../libs/dto/coupon/coupon.update';
 import { Direction, Message } from '../../libs/enums/common.enum';
 import { CouponStatus, CouponType } from '../../libs/enums/coupon.enum';
 
+const couponSortFields = new Set([
+  'createdAt',
+  'updatedAt',
+  'couponCode',
+  'couponTitle',
+  'couponDesc',
+  'couponType',
+  'couponValue',
+  'minAmount',
+  'maxDiscount',
+  'validFrom',
+  'validUntil',
+  'usageLimit',
+  'usedCount',
+  'perUserLimit',
+  'couponStatus',
+]);
+
+const couponUsageSortFields = new Set(['createdAt', 'updatedAt', 'usedAt', 'discountAmount']);
+
 @Injectable()
 export class CouponService {
   constructor(
@@ -39,9 +59,14 @@ export class CouponService {
 
   public async createCoupon(input: CouponInput): Promise<Coupon> {
     const couponCode = input.couponCode.trim().toUpperCase();
+
+    if (!couponCode) {
+      throw new BadRequestException('Coupon code is required.');
+    }
+
     // coupon code unique
     const existingCoupon = await this.couponModel.findOne({
-      couponCode: input.couponCode,
+      couponCode,
       couponDeletedAt: null,
     });
 
@@ -68,27 +93,37 @@ export class CouponService {
       if (input.maxDiscount === undefined || input.maxDiscount === null) {
         throw new BadRequestException('Maximum discount is required for percentage coupons.');
       }
+
+      if (input.maxDiscount <= 0) {
+        throw new BadRequestException('Maximum discount must be greater than zero.');
+      }
     }
 
-    return await this.couponModel.create({
-      couponCode,
-      couponTitle: input.couponTitle.trim(),
+    try {
+      return await this.couponModel.create({
+        couponCode,
+        couponTitle: input.couponTitle.trim(),
+        couponDesc: input.couponDesc?.trim(),
 
-      couponType: input.couponType,
+        couponType: input.couponType,
 
-      couponValue: input.couponValue,
-      minAmount: input.minAmount,
-      maxDiscount: input.maxDiscount,
+        couponValue: input.couponValue,
+        minAmount: input.minAmount,
+        maxDiscount: input.maxDiscount,
 
-      usageLimit: input.usageLimit,
-      usedCount: 0,
-      perUserLimit: input.perUserLimit,
+        usageLimit: input.usageLimit,
+        usedCount: 0,
+        perUserLimit: input.perUserLimit,
 
-      validFrom: new Date(input.validFrom),
-      validUntil: new Date(input.validUntil),
-
-      isActive: true,
-    });
+        validFrom: new Date(input.validFrom),
+        validUntil: new Date(input.validUntil),
+      });
+    } catch (error) {
+      if (error instanceof mongo.MongoServerError && error.code === 11000) {
+        throw new BadRequestException('Coupon code already exists.');
+      }
+      throw error;
+    }
   }
 
   public async getAllCoupons(input: CouponInquiry): Promise<Coupons> {
@@ -99,7 +134,7 @@ export class CouponService {
     const search = input.search;
 
     if (search?.text?.trim()) {
-      const keyword = search.text.trim();
+      const keyword = search.text.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
       match.$or = [
         {
@@ -183,17 +218,19 @@ export class CouponService {
       throw new BadRequestException('Percentage discount cannot exceed 100%.');
     }
 
+    const maxDiscount = input.maxDiscount !== undefined ? input.maxDiscount : coupon.maxDiscount;
+
+    if (couponType === CouponType.PERCENT && (maxDiscount === undefined || maxDiscount === null)) {
+      throw new BadRequestException('Maximum discount is required for percentage coupons.');
+    }
+
     // Usage limit validation
     if (input.usageLimit !== undefined && input.usageLimit < coupon.usedCount) {
       throw new BadRequestException('Usage limit cannot be less than used count.');
     }
 
     // Percent coupon requires maxDiscount
-    if (
-      couponType === CouponType.PERCENT &&
-      input.maxDiscount !== undefined &&
-      input.maxDiscount <= 0
-    ) {
+    if (couponType === CouponType.PERCENT && maxDiscount !== undefined && maxDiscount <= 0) {
       throw new BadRequestException('Maximum discount must be greater than zero.');
     }
 
@@ -296,7 +333,8 @@ export class CouponService {
     memberId: ObjectId,
     input: CouponUsageInquiry,
   ): Promise<CouponUsages> {
-    const sortField = input.sort ?? 'createdAt';
+    const sortField =
+      input.sort && couponUsageSortFields.has(input.sort) ? input.sort : 'createdAt';
 
     const sortDirection = input.direction === Direction.ASC ? 1 : -1;
 
@@ -359,7 +397,8 @@ export class CouponService {
       throw new BadRequestException(Message.NO_DATA_FOUND);
     }
 
-    const sortField = input.sort ?? 'createdAt';
+    const sortField =
+      input.sort && couponUsageSortFields.has(input.sort) ? input.sort : 'createdAt';
 
     const sortDirection = input.direction === Direction.ASC ? 1 : -1;
 
@@ -435,6 +474,9 @@ export class CouponService {
         couponStatus: CouponStatus.ACTIVE,
         validFrom: { $lte: now },
         validUntil: { $gte: now },
+        $expr: {
+          $or: [{ $eq: ['$usageLimit', 0] }, { $lt: ['$usedCount', '$usageLimit'] }],
+        },
       })
       .lean()
       .exec();
@@ -462,7 +504,7 @@ export class CouponService {
   ): Promise<Coupons> {
     const { page, limit } = input;
 
-    const sortField = input.sort ?? 'createdAt';
+    const sortField = input.sort && couponSortFields.has(input.sort) ? input.sort : 'createdAt';
     const sortDirection = input.direction === Direction.ASC ? 1 : -1;
 
     const result = await this.couponModel.aggregate([
