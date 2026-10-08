@@ -11,6 +11,15 @@ export enum FaqCategory {
   TRAVEL_MATE = 'TRAVEL_MATE',
 }
 
+export enum FaqStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+}
+
 registerEnumType(FaqCategory, {
   name: 'FaqCategory',
+});
+
+registerEnumType(FaqStatus, {
+  name: 'FaqStatus',
 });

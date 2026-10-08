@@ -1,6 +1,6 @@
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
-import { FaqCategory } from '../../enums/faq.enum';
+import { FaqCategory, FaqStatus } from '../../enums/faq.enum';
 import { TotalCounter } from '../member/member';
 
 @ObjectType()
@@ -13,6 +13,9 @@ export class Faq {
 
   @Field(() => FaqCategory)
   faqCategory: FaqCategory;
+
+  @Field(() => FaqStatus)
+  faqStatus: FaqStatus;
 
   @Field(() => String)
   faqQuestion: string;
