@@ -1,20 +1,22 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
-import { shapeIntoMongoObjectId } from '../../../libs/config';
 import { PrivateMessage, PrivateMessages } from '../../../libs/dto/chat/private-message';
 import {
   PrivateMessageInput,
   PrivateMessagesInquiry,
 } from '../../../libs/dto/chat/private-message.input';
 import { AuthMember } from '../../auth/decorators/authMember.decorator';
-import { AuthGuard } from '../../auth/guards/auth.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { MemberType } from '../../../libs/enums/member.enum';
 import { MessageService } from './message.service';
 
 @Resolver()
 export class MessageResolver {
   constructor(private readonly messageService: MessageService) {}
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Mutation(() => PrivateMessage)
   public async sendMessage(
     @Args('input') input: PrivateMessageInput,
@@ -25,7 +27,8 @@ export class MessageResolver {
     return this.messageService.sendMessage(memberId, input);
   }
 
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Query(() => PrivateMessages)
   public async getMessages(
     @AuthMember('_id')
@@ -41,10 +44,18 @@ export class MessageResolver {
   ): Promise<PrivateMessages> {
     console.log('Query: getMessages');
 
-    return this.messageService.getMessages(memberId, shapeIntoMongoObjectId(conversationId), input);
+    return this.messageService.getMessages(memberId, conversationId, input);
   }
 
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
+  @Query(() => Number)
+  public async getMyUnreadMessageCount(@AuthMember('_id') memberId: ObjectId): Promise<number> {
+    return this.messageService.getUnreadMessageCount(memberId);
+  }
+
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Mutation(() => PrivateMessage)
   public async markMessageAsRead(
     @Args('messageId', { type: () => String })
@@ -53,10 +64,11 @@ export class MessageResolver {
   ): Promise<PrivateMessage> {
     console.log('Mutation: markMessageAsRead');
 
-    return this.messageService.markMessageAsRead(memberId, shapeIntoMongoObjectId(messageId));
+    return this.messageService.markMessageAsRead(memberId, messageId);
   }
 
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Mutation(() => Boolean)
   public async markConversationAsRead(
     @Args('conversationId', { type: () => String })
@@ -67,13 +79,11 @@ export class MessageResolver {
   ): Promise<boolean> {
     console.log('Mutation: markConversationAsRead');
 
-    return this.messageService.markConversationAsRead(
-      memberId,
-      shapeIntoMongoObjectId(conversationId),
-    );
+    return this.messageService.markConversationAsRead(memberId, conversationId);
   }
 
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Mutation(() => PrivateMessage)
   public async deleteMessage(
     @Args('messageId', { type: () => String })
@@ -84,6 +94,6 @@ export class MessageResolver {
   ): Promise<PrivateMessage> {
     console.log('Mutation: deleteMessage');
 
-    return this.messageService.deleteMessage(memberId, shapeIntoMongoObjectId(messageId));
+    return this.messageService.deleteMessage(memberId, messageId);
   }
 }

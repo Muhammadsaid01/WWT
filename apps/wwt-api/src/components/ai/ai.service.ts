@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId } from 'mongoose';
 
@@ -51,7 +51,7 @@ interface AIGeneratedResponse {
 
 @Injectable()
 export class AiService {
-  private readonly gemini: GoogleGenAI;
+  private readonly gemini: GoogleGenAI | null;
   private readonly AI_SEARCH_HISTORY_LIMIT = 10;
   private readonly AI_CONVERSATION_HISTORY_LIMIT = 12;
   private readonly AI_HISTORY_MESSAGE_MAX_LENGTH = 1000;
@@ -66,13 +66,18 @@ export class AiService {
   ) {
     const apiKey = process.env.GEMINI_API_KEY;
 
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY is not configured');
-    }
+    this.gemini = apiKey ? new GoogleGenAI({ apiKey }) : null;
+  }
 
-    this.gemini = new GoogleGenAI({
-      apiKey,
-    });
+  public isAvailable(): boolean {
+    return this.gemini !== null;
+  }
+
+  private getGemini(): GoogleGenAI {
+    if (!this.gemini) {
+      throw new ServiceUnavailableException('AI Assistant is not configured on the server.');
+    }
+    return this.gemini;
   }
 
   // =========================================================
@@ -398,7 +403,7 @@ Answer the user's latest message.
     // FINAL GEMINI RESPONSE
     // =========================================================
 
-    const response = await this.gemini.models.generateContent({
+    const response = await this.getGemini().models.generateContent({
       model: 'gemini-3.5-flash',
       contents: prompt,
     });
@@ -511,7 +516,7 @@ Do not add explanations.
     // GEMINI PARSER
     // =========================================================
 
-    const response = await this.gemini.models.generateContent({
+    const response = await this.getGemini().models.generateContent({
       model: 'gemini-3.5-flash',
       contents: prompt,
     });

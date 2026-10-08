@@ -5,7 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
-import { Connection, Model, ObjectId } from 'mongoose';
+import { Connection, isValidObjectId, Model, ObjectId } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../../libs/config';
 import {
   PrivateConversation,
@@ -17,17 +17,19 @@ import {
 } from '../../../libs/dto/chat/private-conversation.input';
 import { PrivateMessage } from '../../../libs/dto/chat/private-message';
 import { Direction, Message } from '../../../libs/enums/common.enum';
+import { PrivateMessageStatus } from '../../../libs/enums/chat.enum';
 import { T } from '../../../libs/types/common';
 import { MemberService } from '../../member/member.service';
 
 @Injectable()
 export class ConversationService {
+  private readonly ALLOWED_SORTS = new Set(['lastMessageAt', 'createdAt', 'updatedAt']);
+
   constructor(
     @InjectModel('Conversation')
     private readonly conversationModel: Model<PrivateConversation>,
     @InjectModel('Message')
     private readonly messageModel: Model<PrivateMessage>,
-
     @InjectConnection()
     private readonly connection: Connection,
     private readonly memberService: MemberService,
@@ -38,51 +40,42 @@ export class ConversationService {
     input: PrivateConversationInput,
   ): Promise<PrivateConversation> {
     try {
-      const targetMemberId = shapeIntoMongoObjectId(input.memberTwoId);
+      if (!isValidObjectId(input.memberTwoId)) {
+        throw new BadRequestException('Invalid member ID.');
+      }
 
-      // 1. O'zi bilan conversation ocholmaydi
+      const targetMemberId = shapeIntoMongoObjectId(input.memberTwoId);
       if (memberId.toString() === targetMemberId.toString()) {
         throw new BadRequestException('You cannot create a conversation with yourself.');
       }
 
-      // 2. Target member mavjudligini tekshiramiz
-      const targetMember = await this.memberService.getMember(null, targetMemberId);
+      await this.memberService.getMember(null, targetMemberId);
 
-      if (!targetMember) {
-        throw new BadRequestException(Message.NO_DATA_FOUND);
+      const [firstId, secondId] = [memberId.toString(), targetMemberId.toString()].sort();
+      const memberOneId = shapeIntoMongoObjectId(firstId);
+      const memberTwoId = shapeIntoMongoObjectId(secondId);
+
+      const result = await this.conversationModel.findOneAndUpdate(
+        { memberOneId, memberTwoId },
+        { $setOnInsert: { memberOneId, memberTwoId } },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      );
+
+      if (!result) {
+        throw new InternalServerErrorException(Message.CREATE_FAILED);
       }
-
-      // 3. Member IDlarni bir xil tartibga keltiramiz
-      const sortedIds = [memberId.toString(), targetMemberId.toString()].sort();
-
-      const memberOneId = shapeIntoMongoObjectId(sortedIds[0]);
-
-      const memberTwoId = shapeIntoMongoObjectId(sortedIds[1]);
-
-      // 4. Conversation mavjudligini tekshiramiz
-      const existingConversation = await this.conversationModel.findOne({
-        memberOneId,
-        memberTwoId,
-      });
-
-      if (existingConversation) {
-        return existingConversation;
-      }
-
-      // 5. Yangi conversation yaratamiz
-      const result = await this.conversationModel.create({
-        memberOneId,
-        memberTwoId,
-      });
 
       return result;
-    } catch (error) {
-      console.log('Error, Service createConversation:', error);
-
-      if (error instanceof HttpException) {
-        throw error;
+    } catch (error: any) {
+      if (error?.code === 11000 && isValidObjectId(input.memberTwoId)) {
+        const ids = [memberId.toString(), input.memberTwoId].sort().map(shapeIntoMongoObjectId);
+        const existing = await this.conversationModel.findOne({
+          memberOneId: ids[0],
+          memberTwoId: ids[1],
+        });
+        if (existing) return existing;
       }
-
+      if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException(Message.CREATE_FAILED);
     }
   }
@@ -94,117 +87,168 @@ export class ConversationService {
     const match: T = {
       $or: [{ memberOneId: memberId }, { memberTwoId: memberId }],
     };
+    const sortField = this.ALLOWED_SORTS.has(input.sort ?? '') ? input.sort! : 'lastMessageAt';
+    const direction = input.direction ?? Direction.DESC;
+    const sort: T = { [sortField]: direction, _id: direction };
 
-    const sort: T = {
-      [input.sort ?? 'lastMessageAt']: input.direction ?? Direction.DESC,
-    };
-
-    const result = await this.conversationModel.aggregate([
-      {
-        $match: match,
-      },
-
-      {
-        $sort: sort,
-      },
-
+    const [result] = await this.conversationModel.aggregate([
+      { $match: match },
+      { $sort: sort },
       {
         $facet: {
           list: [
+            { $skip: (input.page - 1) * input.limit },
+            { $limit: input.limit },
             {
-              $skip: (input.page - 1) * input.limit,
+              $lookup: {
+                from: 'members',
+                localField: 'memberOneId',
+                foreignField: '_id',
+                as: 'memberOneData',
+              },
+            },
+            { $unwind: { path: '$memberOneData', preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: 'members',
+                localField: 'memberTwoId',
+                foreignField: '_id',
+                as: 'memberTwoData',
+              },
+            },
+            { $unwind: { path: '$memberTwoData', preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: 'privateMessages',
+                let: { conversationId: '$_id' },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ['$conversationId', '$$conversationId'] },
+                          { $eq: ['$receiverId', memberId] },
+                          { $eq: ['$messageStatus', PrivateMessageStatus.SENT] },
+                        ],
+                      },
+                    },
+                  },
+                  { $count: 'total' },
+                ],
+                as: 'unreadMeta',
+              },
             },
             {
-              $limit: input.limit,
+              $addFields: {
+                unreadCount: { $ifNull: [{ $arrayElemAt: ['$unreadMeta.total', 0] }, 0] },
+              },
             },
+            { $project: { unreadMeta: 0 } },
           ],
-
-          metaCounter: [
-            {
-              $count: 'total',
-            },
-          ],
+          metaCounter: [{ $count: 'total' }],
         },
       },
     ]);
 
     return {
-      list: result[0]?.list ?? [],
-      metaCounter: result[0]?.metaCounter ?? [],
+      list: result?.list ?? [],
+      metaCounter: result?.metaCounter ?? [],
     };
   }
 
   public async getConversation(
     memberId: ObjectId,
-    conversationId: ObjectId,
+    conversationId: ObjectId | string,
   ): Promise<PrivateConversation> {
-    const result = await this.conversationModel.findOne({
-      _id: conversationId,
-      $or: [{ memberOneId: memberId }, { memberTwoId: memberId }],
-    });
-
-    if (!result) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
+    if (!isValidObjectId(conversationId)) {
+      throw new BadRequestException('Invalid conversation ID.');
     }
+    const targetConversationId = shapeIntoMongoObjectId(conversationId);
 
-    return result;
+    const [result] = await this.conversationModel.aggregate([
+      {
+        $match: {
+          _id: targetConversationId,
+          $or: [{ memberOneId: memberId }, { memberTwoId: memberId }],
+        },
+      },
+      {
+        $lookup: {
+          from: 'members',
+          localField: 'memberOneId',
+          foreignField: '_id',
+          as: 'memberOneData',
+        },
+      },
+      { $unwind: { path: '$memberOneData', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'members',
+          localField: 'memberTwoId',
+          foreignField: '_id',
+          as: 'memberTwoData',
+        },
+      },
+      { $unwind: { path: '$memberTwoData', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'privateMessages',
+          let: { conversationId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$conversationId', '$$conversationId'] },
+                    { $eq: ['$receiverId', memberId] },
+                    { $eq: ['$messageStatus', PrivateMessageStatus.SENT] },
+                  ],
+                },
+              },
+            },
+            { $count: 'total' },
+          ],
+          as: 'unreadMeta',
+        },
+      },
+      {
+        $addFields: {
+          unreadCount: { $ifNull: [{ $arrayElemAt: ['$unreadMeta.total', 0] }, 0] },
+        },
+      },
+      { $project: { unreadMeta: 0 } },
+    ]);
+
+    if (!result) throw new BadRequestException(Message.NO_DATA_FOUND);
+    return result as PrivateConversation;
   }
 
   public async deleteConversation(
     memberId: ObjectId,
-    conversationId: ObjectId,
+    conversationId: ObjectId | string,
   ): Promise<PrivateConversation> {
+    if (!isValidObjectId(conversationId)) {
+      throw new BadRequestException('Invalid conversation ID.');
+    }
+    const targetConversationId = shapeIntoMongoObjectId(conversationId);
     const session = await this.connection.startSession();
-
     try {
       session.startTransaction();
-
-      // 1. Conversation mavjudmi va user participantmi?
       const conversation = await this.conversationModel
         .findOne({
-          _id: conversationId,
-
+          _id: targetConversationId,
           $or: [{ memberOneId: memberId }, { memberTwoId: memberId }],
         })
         .session(session);
+      if (!conversation) throw new BadRequestException(Message.NO_DATA_FOUND);
 
-      if (!conversation) {
-        throw new BadRequestException(Message.NO_DATA_FOUND);
-      }
-
-      // 2. Barcha child message'larni hard delete
-      await this.messageModel.deleteMany(
-        {
-          conversationId: conversation._id,
-        },
-        {
-          session,
-        },
-      );
-
-      // 3. Parent conversationni hard delete
-      await this.conversationModel.deleteOne(
-        {
-          _id: conversation._id,
-        },
-        {
-          session,
-        },
-      );
-
-      // 4. Transaction commit
+      await this.messageModel.deleteMany({ conversationId: conversation._id }, { session });
+      await this.conversationModel.deleteOne({ _id: conversation._id }, { session });
       await session.commitTransaction();
-
       return conversation;
     } catch (error) {
       await session.abortTransaction();
-
-      console.log('Error, Service deleteConversation:', error);
-
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
+      if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException(Message.DELETE_FAILED);
     } finally {
       await session.endSession();

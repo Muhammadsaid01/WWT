@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 import { PrivateMessageStatus, PrivateMessageType } from '../../enums/chat.enum';
 import { Direction } from '../../enums/common.enum';
 
@@ -49,6 +49,7 @@ export class PrivateMessagesInquiry {
 
   @IsNotEmpty()
   @Min(1)
+  @Max(100)
   @Field(() => Int)
   limit: number;
 

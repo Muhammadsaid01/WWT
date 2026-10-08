@@ -1,6 +1,6 @@
-import { Field, ObjectType } from '@nestjs/graphql';
+import { Field, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
-import { TotalCounter } from '../member/member';
+import { Member, TotalCounter } from '../member/member';
 
 @ObjectType()
 export class PrivateConversation {
@@ -18,6 +18,15 @@ export class PrivateConversation {
 
   @Field(() => Date, { nullable: true })
   lastMessageAt?: Date;
+
+  @Field(() => Member, { nullable: true })
+  memberOneData?: Member;
+
+  @Field(() => Member, { nullable: true })
+  memberTwoData?: Member;
+
+  @Field(() => Int, { nullable: true })
+  unreadCount?: number;
 
   @Field(() => Date)
   createdAt: Date;

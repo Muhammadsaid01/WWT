@@ -55,8 +55,8 @@ const PrivateMessageSchema = new Schema(
   },
 );
 
-PrivateMessageSchema.index({ conversationId: 1, createdAt: -1 });
+PrivateMessageSchema.index({ conversationId: 1, createdAt: -1, _id: -1 });
 PrivateMessageSchema.index({ senderId: 1 });
-PrivateMessageSchema.index({ receiverId: 1 });
+PrivateMessageSchema.index({ receiverId: 1, messageStatus: 1 });
 
 export default PrivateMessageSchema;

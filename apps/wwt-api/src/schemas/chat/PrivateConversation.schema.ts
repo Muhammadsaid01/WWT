@@ -35,6 +35,6 @@ PrivateConversationSchema.index({ memberOneId: 1, memberTwoId: 1 }, { unique: tr
 
 PrivateConversationSchema.index({ memberOneId: 1 });
 PrivateConversationSchema.index({ memberTwoId: 1 });
-PrivateConversationSchema.index({ lastMessageAt: -1 });
+PrivateConversationSchema.index({ lastMessageAt: -1, _id: -1 });
 
 export default PrivateConversationSchema;

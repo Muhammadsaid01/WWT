@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId } from 'mongoose';
+import { isValidObjectId, Model, ObjectId } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../../libs/config';
 import { PrivateConversation } from '../../../libs/dto/chat/private-conversation';
 import { PrivateMessage, PrivateMessages } from '../../../libs/dto/chat/private-message';
@@ -14,59 +14,60 @@ import { T } from '../../../libs/types/common';
 
 @Injectable()
 export class MessageService {
+  private readonly MAX_MESSAGE_LENGTH = 5000;
+  private readonly ALLOWED_SORTS = new Set(['createdAt', 'updatedAt']);
+
   constructor(
     @InjectModel('Message')
     private readonly messageModel: Model<PrivateMessage>,
-
     @InjectModel('Conversation')
     private readonly conversationModel: Model<PrivateConversation>,
   ) {}
+
   public async sendMessage(
     memberId: ObjectId,
     input: PrivateMessageInput,
   ): Promise<PrivateMessage> {
-    const conversationId = shapeIntoMongoObjectId(input.conversationId);
+    if (!isValidObjectId(input.conversationId)) {
+      throw new BadRequestException('Invalid conversation ID.');
+    }
 
+    const conversationId = shapeIntoMongoObjectId(input.conversationId);
     const conversation = await this.conversationModel.findOne({
       _id: conversationId,
       $or: [{ memberOneId: memberId }, { memberTwoId: memberId }],
     });
-
-    if (!conversation) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
+    if (!conversation) throw new BadRequestException(Message.NO_DATA_FOUND);
 
     const receiverId =
       conversation.memberOneId.toString() === memberId.toString()
         ? conversation.memberTwoId
         : conversation.memberOneId;
+    const messageContent = input.messageContent?.trim();
+    const messageImages = input.messageImages?.filter((image) => image?.trim()) ?? [];
 
-    const hasContent = !!input.messageContent?.trim();
-
-    const hasImages = !!input.messageImages?.length;
-
-    if (!hasContent && !hasImages) {
+    if (!messageContent && messageImages.length === 0) {
       throw new BadRequestException('Message content or image is required.');
+    }
+    if (messageContent && messageContent.length > this.MAX_MESSAGE_LENGTH) {
+      throw new BadRequestException(
+        `Message must not exceed ${this.MAX_MESSAGE_LENGTH} characters.`,
+      );
     }
 
     const result = await this.messageModel.create({
       conversationId,
       senderId: memberId,
       receiverId,
-
       messageType: input.messageType ?? PrivateMessageType.TEXT,
-
-      messageContent: input.messageContent?.trim() ?? null,
-
-      messageImages: input.messageImages ?? [],
-
+      messageContent: messageContent ?? null,
+      messageImages,
       messageStatus: PrivateMessageStatus.SENT,
     });
 
     await this.conversationModel.findByIdAndUpdate(conversationId, {
       $set: {
         lastMessage: result.messageContent ?? (result.messageImages.length ? 'Image' : null),
-
         lastMessageAt: result.createdAt,
       },
     });
@@ -76,118 +77,100 @@ export class MessageService {
 
   public async getMessages(
     memberId: ObjectId,
-    conversationId: ObjectId,
+    conversationId: ObjectId | string,
     input: PrivateMessagesInquiry,
   ): Promise<PrivateMessages> {
-    // 1. Conversation mavjud va member participant ekanini tekshiramiz
+    if (!isValidObjectId(conversationId)) {
+      throw new BadRequestException('Invalid conversation ID.');
+    }
+    const targetConversationId = shapeIntoMongoObjectId(conversationId);
     const conversation = await this.conversationModel.findOne({
-      _id: conversationId,
+      _id: targetConversationId,
       $or: [{ memberOneId: memberId }, { memberTwoId: memberId }],
     });
+    if (!conversation) throw new BadRequestException(Message.NO_DATA_FOUND);
 
-    if (!conversation) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
-
-    // 2. Message filter
-    const match: T = {
-      conversationId,
-    };
-
+    const match: T = { conversationId: targetConversationId };
     const search = input.search ?? {};
-
     if (search.senderId) {
+      if (!isValidObjectId(search.senderId)) throw new BadRequestException('Invalid sender ID.');
       match.senderId = shapeIntoMongoObjectId(search.senderId);
     }
-
     if (search.receiverId) {
+      if (!isValidObjectId(search.receiverId))
+        throw new BadRequestException('Invalid receiver ID.');
       match.receiverId = shapeIntoMongoObjectId(search.receiverId);
     }
+    if (search.messageStatus) match.messageStatus = search.messageStatus;
 
-    if (search.messageStatus) {
-      match.messageStatus = search.messageStatus;
-    }
+    const sortField = this.ALLOWED_SORTS.has(input.sort ?? '') ? input.sort! : 'createdAt';
+    const direction = input.direction ?? Direction.DESC;
+    const sort: T = { [sortField]: direction, _id: direction };
 
-    const sort: T = {
-      [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
-    };
-
-    // 3. Messages
-    const result = await this.messageModel.aggregate([
-      {
-        $match: match,
-      },
-      {
-        $sort: sort,
-      },
+    const [result] = await this.messageModel.aggregate([
+      { $match: match },
+      { $sort: sort },
       {
         $facet: {
-          list: [
-            {
-              $skip: (input.page - 1) * input.limit,
-            },
-            {
-              $limit: input.limit,
-            },
-          ],
-
-          metaCounter: [
-            {
-              $count: 'total',
-            },
-          ],
+          list: [{ $skip: (input.page - 1) * input.limit }, { $limit: input.limit }],
+          metaCounter: [{ $count: 'total' }],
         },
       },
     ]);
 
     return {
-      list: result[0]?.list ?? [],
-      metaCounter: result[0]?.metaCounter ?? [],
+      list: result?.list ?? [],
+      metaCounter: result?.metaCounter ?? [],
     };
   }
-  public async markMessageAsRead(memberId: ObjectId, messageId: ObjectId): Promise<PrivateMessage> {
+
+  public async getUnreadMessageCount(memberId: ObjectId): Promise<number> {
+    return this.messageModel.countDocuments({
+      receiverId: memberId,
+      messageStatus: PrivateMessageStatus.SENT,
+    });
+  }
+
+  public async markMessageAsRead(
+    memberId: ObjectId,
+    messageId: ObjectId | string,
+  ): Promise<PrivateMessage> {
+    if (!isValidObjectId(messageId)) throw new BadRequestException('Invalid message ID.');
+    const targetMessageId = shapeIntoMongoObjectId(messageId);
     const targetMessage = await this.messageModel.findOne({
-      _id: messageId,
+      _id: targetMessageId,
       receiverId: memberId,
     });
-
-    if (!targetMessage) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
-
-    if (targetMessage.messageStatus === PrivateMessageStatus.READ) {
-      return targetMessage;
+    if (!targetMessage) throw new BadRequestException(Message.NO_DATA_FOUND);
+    if (targetMessage.messageStatus === PrivateMessageStatus.READ) return targetMessage;
+    if (targetMessage.messageStatus === PrivateMessageStatus.DELETED) {
+      throw new BadRequestException('Deleted messages cannot be marked as read.');
     }
 
     targetMessage.messageStatus = PrivateMessageStatus.READ;
-
     targetMessage.readAt = new Date();
-
-    return await targetMessage.save();
+    return targetMessage.save();
   }
 
   public async markConversationAsRead(
     memberId: ObjectId,
-    conversationId: ObjectId,
+    conversationId: ObjectId | string,
   ): Promise<boolean> {
-    // 1. User shu conversation participantimi?
+    if (!isValidObjectId(conversationId)) {
+      throw new BadRequestException('Invalid conversation ID.');
+    }
+    const targetConversationId = shapeIntoMongoObjectId(conversationId);
     const conversation = await this.conversationModel.findOne({
-      _id: conversationId,
+      _id: targetConversationId,
       $or: [{ memberOneId: memberId }, { memberTwoId: memberId }],
     });
+    if (!conversation) throw new BadRequestException(Message.NO_DATA_FOUND);
 
-    if (!conversation) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
-
-    // 2. Faqat user qabul qilgan unread message'larni READ qilamiz
     await this.messageModel.updateMany(
       {
-        conversationId,
+        conversationId: targetConversationId,
         receiverId: memberId,
-        messageStatus: {
-          $ne: PrivateMessageStatus.READ,
-        },
+        messageStatus: PrivateMessageStatus.SENT,
       },
       {
         $set: {
@@ -196,48 +179,36 @@ export class MessageService {
         },
       },
     );
-
     return true;
   }
 
-  public async deleteMessage(memberId: ObjectId, messageId: ObjectId): Promise<PrivateMessage> {
+  public async deleteMessage(
+    memberId: ObjectId,
+    messageId: ObjectId | string,
+  ): Promise<PrivateMessage> {
+    if (!isValidObjectId(messageId)) throw new BadRequestException('Invalid message ID.');
+    const targetMessageId = shapeIntoMongoObjectId(messageId);
     const targetMessage = await this.messageModel.findOne({
-      _id: messageId,
+      _id: targetMessageId,
       senderId: memberId,
     });
-
-    if (!targetMessage) {
-      throw new BadRequestException(Message.NO_DATA_FOUND);
-    }
+    if (!targetMessage) throw new BadRequestException(Message.NO_DATA_FOUND);
 
     const conversationId = targetMessage.conversationId;
-
-    // Message HARD DELETE
-    await this.messageModel.deleteOne({
-      _id: messageId,
-      senderId: memberId,
+    await this.messageModel.deleteOne({ _id: targetMessageId, senderId: memberId });
+    const latestMessage = await this.messageModel.findOne({ conversationId }).sort({
+      createdAt: -1,
+      _id: -1,
     });
 
-    // O'chirilgandan keyingi eng oxirgi message
-    const latestMessage = await this.messageModel
-      .findOne({
-        conversationId,
-      })
-      .sort({
-        createdAt: -1,
-      });
-
-    // Conversation lastMessage'ni qayta update qilamiz
     await this.conversationModel.findByIdAndUpdate(conversationId, {
       $set: {
         lastMessage: latestMessage
           ? (latestMessage.messageContent ?? (latestMessage.messageImages?.length ? 'Image' : null))
           : null,
-
         lastMessageAt: latestMessage ? latestMessage.createdAt : null,
       },
     });
-
     return targetMessage;
   }
 }

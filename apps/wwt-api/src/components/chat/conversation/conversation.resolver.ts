@@ -1,7 +1,6 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
-import { shapeIntoMongoObjectId } from '../../../libs/config';
 import {
   PrivateConversation,
   PrivateConversations,
@@ -11,14 +10,17 @@ import {
   PrivateConversationsInquiry,
 } from '../../../libs/dto/chat/private-conversation.input';
 import { AuthMember } from '../../auth/decorators/authMember.decorator';
-import { AuthGuard } from '../../auth/guards/auth.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { MemberType } from '../../../libs/enums/member.enum';
 import { ConversationService } from './conversation.service';
 
 @Resolver()
 export class ConversationResolver {
   constructor(private readonly conversationService: ConversationService) {}
 
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Mutation(() => PrivateConversation)
   public async createConversation(
     @AuthMember('_id') memberId: ObjectId,
@@ -29,7 +31,8 @@ export class ConversationResolver {
     return this.conversationService.createConversation(memberId, input);
   }
 
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Query(() => PrivateConversations)
   public async getMyConversations(
     @AuthMember('_id') memberId: ObjectId,
@@ -39,7 +42,8 @@ export class ConversationResolver {
 
     return this.conversationService.getMyConversations(memberId, input);
   }
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Query(() => PrivateConversation)
   public async getConversation(
     @AuthMember('_id') memberId: ObjectId,
@@ -49,13 +53,11 @@ export class ConversationResolver {
   ): Promise<PrivateConversation> {
     console.log('Query: getConversation');
 
-    return this.conversationService.getConversation(
-      memberId,
-      shapeIntoMongoObjectId(conversationId),
-    );
+    return this.conversationService.getConversation(memberId, conversationId);
   }
 
-  @UseGuards(AuthGuard)
+  @Roles(MemberType.USER, MemberType.AGENT, MemberType.ADMIN)
+  @UseGuards(RolesGuard)
   @Mutation(() => PrivateConversation)
   public async deleteConversation(
     @AuthMember('_id')
@@ -68,9 +70,6 @@ export class ConversationResolver {
   ): Promise<PrivateConversation> {
     console.log('Mutation: deleteConversation');
 
-    return this.conversationService.deleteConversation(
-      memberId,
-      shapeIntoMongoObjectId(conversationId),
-    );
+    return this.conversationService.deleteConversation(memberId, conversationId);
   }
 }

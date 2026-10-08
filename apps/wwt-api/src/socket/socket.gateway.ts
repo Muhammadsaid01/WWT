@@ -15,10 +15,12 @@ import { Server } from 'ws';
 import * as WS from 'ws';
 import { AiService } from '../components/ai/ai.service';
 import { AuthService } from '../components/auth/auth.service';
+import { ConversationService } from '../components/chat/conversation/conversation.service';
 import { MessageService } from '../components/chat/message/message.service';
-import { shapeIntoMongoObjectId } from '../libs/config';
+import { OpenchatService } from '../components/openchat/openchat.service';
 import { Member } from '../libs/dto/member/member';
 import { PrivateMessageType } from '../libs/enums/chat.enum';
+import { MemberType } from '../libs/enums/member.enum';
 import { AIErrorCode } from '../libs/enums/common.enum';
 type WsClient = WS.WebSocket;
 /**
@@ -39,7 +41,6 @@ interface JoinConversationPayload {
 
 interface TypingPayload {
   conversationId: string;
-  receiverId: string;
 }
 
 interface PrivateMessagePayload {
@@ -61,13 +62,6 @@ interface MemberOnlinePayload {
   memberId: string;
 }
 
-interface OpenChatMessagePayload {
-  event: string;
-  text: string;
-  memberData: Member;
-  createdAt: Date;
-}
-
 /**
  * ============================================================
  * SOCKET GATEWAY
@@ -81,16 +75,9 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   private readonly logger = new Logger(SocketGateway.name);
 
   /**
-   * memberId -> WebSocket
-   *
-   * Hozircha bitta member = bitta socket.
-   * Keyinchalik multiple device support kerak bo'lsa:
-   *
-   * Map<string, Set<WsClient>>
-   *
-   * qilamiz.
+   * memberId -> every active WebSocket for that member.
    */
-  private readonly onlineClients = new Map<string, WsClient>();
+  private readonly onlineClients = new Map<string, Set<WsClient>>();
 
   /**
    * WebSocket -> authenticated Member
@@ -102,7 +89,6 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
    */
   private readonly conversationRooms = new Map<string, Set<WsClient>>();
 
-  private readonly openChatMessages: OpenChatMessagePayload[] = [];
   private readonly openChatClients = new Set<WsClient>();
   private readonly aiLastRequestMap = new Map<string, number>();
   private readonly aiProcessingMembers = new Set<string>();
@@ -110,7 +96,9 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   private readonly AI_MAX_MESSAGE_LENGTH = 2000;
   constructor(
     private readonly authService: AuthService,
+    private readonly conversationService: ConversationService,
     private readonly messageService: MessageService,
+    private readonly openchatService: OpenchatService,
     private readonly aiService: AiService,
   ) {}
 
@@ -191,9 +179,12 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     this.clientsAuthMap.set(client, authMember);
 
     /**
-     * Member -> Socket
+     * Member -> every active socket (multiple tabs/devices are supported).
      */
-    this.onlineClients.set(memberId, client);
+    const memberClients = this.onlineClients.get(memberId) ?? new Set<WsClient>();
+    const wasOffline = memberClients.size === 0;
+    memberClients.add(client);
+    this.onlineClients.set(memberId, memberClients);
 
     this.logger.log(`Connected: ${authMember.memberNick} [${memberId}]`);
 
@@ -214,17 +205,19 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
      *
      * "bu member online bo'ldi"
      */
-    this.emitToAll(
-      {
-        event: 'memberOnline',
+    if (wasOffline) {
+      this.emitToAll(
+        {
+          event: 'memberOnline',
 
-        data: {
-          memberId,
+          data: {
+            memberId,
+          },
         },
-      },
 
-      client,
-    );
+        client,
+      );
+    }
   }
 
   /**
@@ -248,9 +241,17 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     this.clientsAuthMap.delete(client);
 
     /**
-     * Online clientsdan o'chiramiz.
+     * Remove only this socket. The member stays online while another tab or
+     * device is still connected.
      */
-    this.onlineClients.delete(memberId);
+    const memberClients = this.onlineClients.get(memberId);
+    memberClients?.delete(client);
+    const isLastConnection = !memberClients || memberClients.size === 0;
+    if (isLastConnection) {
+      this.onlineClients.delete(memberId);
+    }
+
+    const leftOpenChat = this.openChatClients.delete(client);
 
     /**
      * Userni barcha conversation roomlardan
@@ -268,18 +269,32 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       }
     });
 
+    if (leftOpenChat) {
+      this.emitToOpenChat({
+        event: 'openChatInfo',
+        data: {
+          memberId,
+          memberNick: authMember.memberNick,
+          action: 'left',
+          totalClient: this.openChatClients.size,
+        },
+      });
+    }
+
     this.logger.log(`Disconnected: ${authMember.memberNick} [${memberId}]`);
 
     /**
      * Boshqa userlarga offline event.
      */
-    this.emitToAll({
-      event: 'memberOffline',
+    if (isLastConnection) {
+      this.emitToAll({
+        event: 'memberOffline',
 
-      data: {
-        memberId,
-      },
-    });
+        data: {
+          memberId,
+        },
+      });
+    }
   }
 
   /**
@@ -289,55 +304,48 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
    */
 
   @SubscribeMessage('joinConversation')
-  public handleJoinConversation(client: WsClient, payload: JoinConversationPayload): void {
+  public async handleJoinConversation(
+    client: WsClient,
+    payload: JoinConversationPayload,
+  ): Promise<void> {
     const authMember = this.clientsAuthMap.get(client);
-
-    /**
-     * Auth bo'lmagan socket
-     * conversationga kira olmaydi.
-     */
-    if (!authMember) {
+    if (!authMember || !this.canUsePrivateChat(authMember)) {
+      this.sendToClient(client, {
+        event: 'conversationError',
+        message: 'Private chat access denied.',
+      });
       return;
     }
 
     const { conversationId } = payload;
-
     if (!conversationId) {
       this.sendToClient(client, {
-        event: 'error',
+        event: 'conversationError',
         message: 'conversationId is required',
       });
-
       return;
     }
 
-    /**
-     * Room mavjudligini tekshiramiz.
-     */
-    let room = this.conversationRooms.get(conversationId);
-
-    /**
-     * Yo'q bo'lsa yangi room.
-     */
-    if (!room) {
-      room = new Set<WsClient>();
-
-      this.conversationRooms.set(conversationId, room);
+    try {
+      await this.conversationService.getConversation(authMember._id, conversationId);
+    } catch {
+      this.sendToClient(client, {
+        event: 'conversationError',
+        message: 'Conversation was not found or access was denied.',
+      });
+      return;
     }
 
-    /**
-     * Socketni roomga qo'shamiz.
-     */
+    let room = this.conversationRooms.get(conversationId);
+    if (!room) {
+      room = new Set<WsClient>();
+      this.conversationRooms.set(conversationId, room);
+    }
     room.add(client);
-
-    this.logger.log(`${authMember.memberNick} joined conversation [${conversationId}]`);
 
     this.sendToClient(client, {
       event: 'conversationJoined',
-
-      data: {
-        conversationId,
-      },
+      data: { conversationId },
     });
   }
 
@@ -351,7 +359,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   public handleLeaveConversation(client: WsClient, payload: JoinConversationPayload): void {
     const authMember = this.clientsAuthMap.get(client);
 
-    if (!authMember) {
+    if (!authMember || !this.canUsePrivateChat(authMember)) {
       return;
     }
 
@@ -404,7 +412,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     try {
       const authMember = this.clientsAuthMap.get(client);
 
-      if (!authMember) {
+      if (!authMember || !this.canUsePrivateChat(authMember)) {
         this.sendToClient(client, {
           event: 'error',
           message: 'Unauthorized',
@@ -457,9 +465,9 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       });
 
       /**
-       * 5. Senderga confirmation
+       * 5. Confirm to every active sender tab/device so their views stay in sync.
        */
-      this.sendToClient(client, {
+      this.emitToMember(authMember._id.toString(), {
         event: 'messageSent',
         data: savedMessage,
       });
@@ -486,7 +494,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     try {
       const authMember = this.clientsAuthMap.get(client);
 
-      if (!authMember) {
+      if (!authMember || !this.canUsePrivateChat(authMember)) {
         this.sendToClient(client, {
           event: 'error',
           message: 'Unauthorized',
@@ -510,7 +518,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
        */
       const updatedMessage = await this.messageService.markMessageAsRead(
         authMember._id,
-        shapeIntoMongoObjectId(payload.messageId),
+        payload.messageId,
       );
 
       const senderId = updatedMessage.senderId.toString();
@@ -571,7 +579,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     try {
       const authMember = this.clientsAuthMap.get(client);
 
-      if (!authMember) {
+      if (!authMember || !this.canUsePrivateChat(authMember)) {
         this.sendToClient(client, {
           event: 'error',
           message: 'Unauthorized',
@@ -589,9 +597,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         return;
       }
 
-      const conversationId = shapeIntoMongoObjectId(payload.conversationId);
-
-      await this.messageService.markConversationAsRead(authMember._id, conversationId);
+      await this.messageService.markConversationAsRead(authMember._id, payload.conversationId);
 
       /**
        * Receiverga confirmation
@@ -629,53 +635,47 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
    */
 
   @SubscribeMessage('typingStart')
-  public handleTypingStart(client: WsClient, payload: TypingPayload): void {
-    const authMember = this.clientsAuthMap.get(client);
-
-    if (!authMember) {
-      return;
-    }
-
-    if (!payload.conversationId || !payload.receiverId) {
-      return;
-    }
-
-    this.emitToMember(payload.receiverId, {
-      event: 'typingStart',
-      data: {
-        conversationId: payload.conversationId,
-        memberId: authMember._id.toString(),
-        memberNick: authMember.memberNick,
-      },
-    });
+  public async handleTypingStart(client: WsClient, payload: TypingPayload): Promise<void> {
+    await this.emitAuthorizedTyping(client, payload, 'typingStart');
   }
 
-  /**
-   * ============================================================
-   * TYPING STOP
-   * ============================================================
-   */
-
   @SubscribeMessage('typingStop')
-  public handleTypingStop(client: WsClient, payload: TypingPayload): void {
+  public async handleTypingStop(client: WsClient, payload: TypingPayload): Promise<void> {
+    await this.emitAuthorizedTyping(client, payload, 'typingStop');
+  }
+
+  private async emitAuthorizedTyping(
+    client: WsClient,
+    payload: TypingPayload,
+    event: 'typingStart' | 'typingStop',
+  ): Promise<void> {
     const authMember = this.clientsAuthMap.get(client);
+    if (!authMember || !payload.conversationId) return;
 
-    if (!authMember) {
-      return;
+    try {
+      const conversation = await this.conversationService.getConversation(
+        authMember._id,
+        payload.conversationId,
+      );
+      const receiverId =
+        conversation.memberOneId.toString() === authMember._id.toString()
+          ? conversation.memberTwoId.toString()
+          : conversation.memberOneId.toString();
+
+      this.emitToMember(receiverId, {
+        event,
+        data: {
+          conversationId: payload.conversationId,
+          memberId: authMember._id.toString(),
+          memberNick: authMember.memberNick,
+        },
+      });
+    } catch {
+      this.sendToClient(client, {
+        event: 'conversationError',
+        message: 'Conversation was not found or access was denied.',
+      });
     }
-
-    if (!payload.conversationId || !payload.receiverId) {
-      return;
-    }
-
-    this.emitToMember(payload.receiverId, {
-      event: 'typingStop',
-      data: {
-        conversationId: payload.conversationId,
-        memberId: authMember._id.toString(),
-        memberNick: authMember.memberNick,
-      },
-    });
   }
 
   /**
@@ -723,6 +723,14 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
    * ============================================================
    */
 
+  private canUsePrivateChat(member: Member): boolean {
+    return (
+      member.memberType === MemberType.USER ||
+      member.memberType === MemberType.AGENT ||
+      member.memberType === MemberType.ADMIN
+    );
+  }
+
   private sendToClient(client: WsClient, payload: SocketPayload): void {
     if (client.readyState !== WS.OPEN) {
       return;
@@ -738,16 +746,16 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
    */
 
   private emitToMember(memberId: string, payload: SocketPayload): void {
-    const client = this.onlineClients.get(memberId);
+    const clients = this.onlineClients.get(memberId);
 
     /**
      * Member offline.
      */
-    if (!client) {
+    if (!clients) {
       return;
     }
 
-    this.sendToClient(client, payload);
+    clients.forEach((client) => this.sendToClient(client, payload));
   }
 
   /**
@@ -802,107 +810,68 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   @SubscribeMessage('openChatMessage')
   public async handleOpenChatMessage(client: WsClient, payload: string): Promise<void> {
     const authMember = this.clientsAuthMap.get(client);
-
     if (!authMember) {
-      this.sendToClient(client, {
-        event: 'error',
-        message: 'Unauthorized',
-      });
-
+      this.sendToClient(client, { event: 'openChatError', message: 'Unauthorized' });
       return;
     }
-
-    // Open chatga join qilmagan bo'lsa
     if (!this.openChatClients.has(client)) {
+      this.sendToClient(client, { event: 'openChatError', message: 'Join open chat first' });
+      return;
+    }
+
+    try {
+      const savedMessage = await this.openchatService.createMessage(authMember._id, payload);
+      this.emitToOpenChat({ event: 'openChatMessage', data: savedMessage });
+    } catch (error) {
       this.sendToClient(client, {
-        event: 'error',
-        message: 'Join open chat first',
+        event: 'openChatError',
+        message: error instanceof Error ? error.message : 'Message could not be sent.',
       });
-
-      return;
     }
-
-    if (!payload?.trim()) {
-      return;
-    }
-
-    const newMessage: OpenChatMessagePayload = {
-      event: 'openChatMessage',
-      text: payload.trim(),
-      memberData: authMember,
-      createdAt: new Date(),
-    };
-
-    this.openChatMessages.push(newMessage);
-
-    // RAM'da oxirgi 20 ta
-    if (this.openChatMessages.length > 20) {
-      this.openChatMessages.splice(0, this.openChatMessages.length - 20);
-    }
-
-    console.log('EMITTING TO OPEN CHAT:', this.openChatClients.size);
-
-    this.emitToOpenChat(newMessage);
-
-    this.logger.verbose(`OPEN CHAT [${authMember.memberNick}]: ${payload}`);
   }
 
   @SubscribeMessage('openChatJoin')
-  public handleOpenChatJoin(client: WsClient): void {
+  public async handleOpenChatJoin(client: WsClient): Promise<void> {
     const authMember = this.clientsAuthMap.get(client);
-
     if (!authMember) {
-      this.sendToClient(client, {
-        event: 'error',
-        message: 'Unauthorized',
-      });
-
+      this.sendToClient(client, { event: 'openChatError', message: 'Unauthorized' });
       return;
     }
 
-    this.openChatClients.add(client);
-
-    console.log('OPEN CHAT CLIENTS:', this.openChatClients.size);
-
-    // Oldingi 20 ta message
-    this.sendToClient(client, {
-      event: 'openChatMessages',
-      data: {
-        list: this.openChatMessages,
-      },
-    });
-
-    // Open chat ichidagi userlarga joined event
-    this.emitToOpenChat({
-      event: 'openChatInfo',
-      data: {
-        memberId: authMember._id.toString(),
-        memberNick: authMember.memberNick,
-        action: 'joined',
-        totalClient: this.openChatClients.size,
-      },
-    });
+    try {
+      const history = await this.openchatService.getMessages({
+        page: 1,
+        limit: 20,
+        sort: 'createdAt',
+        direction: -1,
+      });
+      this.openChatClients.add(client);
+      this.sendToClient(client, { event: 'openChatMessages', data: history });
+      this.emitToOpenChat({
+        event: 'openChatInfo',
+        data: {
+          memberId: authMember._id.toString(),
+          memberNick: authMember.memberNick,
+          action: 'joined',
+          totalClient: this.openChatClients.size,
+        },
+      });
+    } catch (error) {
+      this.sendToClient(client, {
+        event: 'openChatError',
+        message: error instanceof Error ? error.message : 'Open Chat could not be loaded.',
+      });
+    }
   }
 
   private emitToOpenChat(payload: SocketPayload): void {
-    console.log('emitToOpenChat clients:', this.openChatClients.size);
-
-    this.openChatClients.forEach((client) => {
-      console.log('client readyState:', client.readyState);
-
-      this.sendToClient(client, payload);
-    });
+    this.openChatClients.forEach((client) => this.sendToClient(client, payload));
   }
 
   @SubscribeMessage('openChatLeave')
   public handleOpenChatLeave(client: WsClient): void {
     const authMember = this.clientsAuthMap.get(client);
-
-    if (!authMember) {
-      return;
-    }
-
-    this.openChatClients.delete(client);
+    if (!authMember || !this.openChatClients.delete(client)) return;
 
     this.emitToOpenChat({
       event: 'openChatInfo',
@@ -942,6 +911,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         event: 'aiChatHistory',
         data: {
           list: messages,
+          available: this.aiService.isAvailable(),
         },
       });
 
@@ -981,6 +951,17 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     // =========================================================
 
     const content = payload?.trim();
+
+    if (!this.aiService.isAvailable()) {
+      this.sendToClient(client, {
+        event: 'aiError',
+        data: {
+          code: AIErrorCode.AI_UNAVAILABLE,
+          message: 'AI Assistant is not configured on the server.',
+        },
+      });
+      return;
+    }
 
     // EMPTY MESSAGE
     if (!content) {
