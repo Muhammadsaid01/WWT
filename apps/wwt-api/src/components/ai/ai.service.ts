@@ -403,10 +403,7 @@ Answer the user's latest message.
     // FINAL GEMINI RESPONSE
     // =========================================================
 
-    const response = await this.getGemini().models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-    });
+    const response = await this.generateWithRetry(prompt);
 
     const text = response.text?.trim();
 
@@ -516,10 +513,7 @@ Do not add explanations.
     // GEMINI PARSER
     // =========================================================
 
-    const response = await this.getGemini().models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-    });
+    const response = await this.generateWithRetry(prompt);
 
     const text = response.text?.trim();
 
@@ -601,5 +595,30 @@ Do not add explanations.
         return `${role}: ${content}`;
       })
       .join('\n');
+  }
+
+  private async generateWithRetry(prompt: string) {
+    const maxAttempts = 3;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await this.getGemini().models.generateContent({
+          model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+          contents: prompt,
+        });
+      } catch (error: any) {
+        const status = Number(error.status ?? error.code ?? error.error?.code);
+
+        if (![429, 503].includes(status) || attempt === maxAttempts) {
+          throw error;
+        }
+
+        const delay = 1000 * 2 ** (attempt - 1);
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    throw new ServiceUnavailableException('AI service is temporarily unavailable.');
   }
 }
